@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { loggUt } from '@/lib/actions/auth'
+import { createClient } from '@/lib/supabase/client'
 import { updateHouseholdSettings, addMember, deleteMember } from '@/lib/actions/settings'
 import type { Weekday, MemberRole } from '@/types/database'
 
@@ -378,35 +379,220 @@ export default function InnstillingerKlient({ household, settings, members, user
 
       {/* ── Konto ── */}
       {aktivTab === 'konto' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-900 mb-3">Kontoinformasjon</h3>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                <span className="text-green-700 font-semibold text-sm">
-                  {userEmail[0]?.toUpperCase()}
-                </span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">{userEmail}</p>
-                <p className="text-xs text-gray-400">{household?.name}</p>
-              </div>
-            </div>
-          </div>
+        <KontoTab userEmail={userEmail} household={household} />
+      )}
+    </div>
+  )
+}
 
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <form action={loggUt}>
-              <button
-                type="submit"
-                className="w-full py-2.5 text-sm font-medium text-red-600 bg-red-50
-                  border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-              >
-                Logg ut
-              </button>
-            </form>
+// ─── Konto-tab som separat komponent for å holde state isolert ───
+
+function KontoTab({
+  userEmail,
+  household,
+}: {
+  userEmail: string
+  household: { id: string; name: string } | null
+}) {
+  const [nåværende, setNåværende] = useState('')
+  const [nytt, setNytt] = useState('')
+  const [bekreft, setBekreft] = useState('')
+  const [feil, setFeil] = useState('')
+  const [suksess, setSuksess] = useState('')
+  const [laster, setLaster] = useState(false)
+  const [visSkjema, setVisSkjema] = useState(false)
+
+  const matcher = nytt === bekreft
+  const bekreftFeil = bekreft.length > 0 && !matcher
+
+  async function endrePassord(e: React.FormEvent) {
+    e.preventDefault()
+    setFeil('')
+    setSuksess('')
+
+    if (!matcher) {
+      setFeil('Passordene stemmer ikke overens.')
+      return
+    }
+
+    setLaster(true)
+    const supabase = createClient()
+
+    // Re-autentiser med nåværende passord for å bekrefte identitet
+    const { error: reAuthError } = await supabase.auth.signInWithPassword({
+      email: userEmail,
+      password: nåværende,
+    })
+
+    if (reAuthError) {
+      setFeil('Nåværende passord er feil.')
+      setLaster(false)
+      return
+    }
+
+    // Sett nytt passord
+    const { error } = await supabase.auth.updateUser({ password: nytt })
+
+    if (error) {
+      setFeil('Klarte ikke endre passordet. Prøv igjen.')
+    } else {
+      setSuksess('Passordet er endret!')
+      setNåværende('')
+      setNytt('')
+      setBekreft('')
+      setVisSkjema(false)
+      setTimeout(() => setSuksess(''), 4000)
+    }
+
+    setLaster(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Kontoinformasjon */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <h3 className="font-semibold text-gray-900 mb-3">Kontoinformasjon</h3>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+            <span className="text-green-700 font-semibold text-sm">
+              {userEmail[0]?.toUpperCase()}
+            </span>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">{userEmail}</p>
+            <p className="text-xs text-gray-400">{household?.name}</p>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Endre passord */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-gray-900">Passord</h3>
+          {!visSkjema && (
+            <button
+              onClick={() => setVisSkjema(true)}
+              className="text-sm text-green-600 hover:text-green-700 font-medium"
+            >
+              Endre passord
+            </button>
+          )}
+        </div>
+
+        {suksess && (
+          <p className="text-sm text-green-600 font-medium mt-1">{suksess}</p>
+        )}
+
+        {!visSkjema ? (
+          <p className="text-sm text-gray-400 mt-1">••••••••</p>
+        ) : (
+          <form onSubmit={endrePassord} className="mt-4 space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nåværende passord
+              </label>
+              <input
+                type="password"
+                required
+                value={nåværende}
+                onChange={(e) => setNåværende(e.target.value)}
+                placeholder="••••••••"
+                autoFocus
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nytt passord
+              </label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={nytt}
+                onChange={(e) => setNytt(e.target.value)}
+                placeholder="Minst 8 tegn"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Bekreft nytt passord
+              </label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={bekreft}
+                onChange={(e) => setBekreft(e.target.value)}
+                placeholder="Gjenta nytt passord"
+                className={`w-full rounded-lg border px-3 py-2 text-sm
+                  focus:outline-none focus:ring-2 focus:border-transparent ${
+                    bekreftFeil
+                      ? 'border-red-400 focus:ring-red-400'
+                      : bekreft.length > 0 && matcher
+                      ? 'border-green-400 focus:ring-green-500'
+                      : 'border-gray-300 focus:ring-green-500'
+                  }`}
+              />
+              {bekreftFeil && (
+                <p className="mt-1 text-xs text-red-600">Passordene stemmer ikke overens</p>
+              )}
+              {bekreft.length > 0 && matcher && (
+                <p className="mt-1 text-xs text-green-600">✓ Passordene matcher</p>
+              )}
+            </div>
+
+            {feil && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {feil}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setVisSkjema(false)
+                  setNåværende('')
+                  setNytt('')
+                  setBekreft('')
+                  setFeil('')
+                }}
+                className="flex-1 py-2 text-sm font-medium text-gray-600 bg-gray-100
+                  rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Avbryt
+              </button>
+              <button
+                type="submit"
+                disabled={laster || bekreftFeil || bekreft.length === 0}
+                className="flex-1 py-2 text-sm font-medium text-white bg-green-600
+                  rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {laster ? 'Lagrer…' : 'Lagre nytt passord'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Logg ut */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <form action={loggUt}>
+          <button
+            type="submit"
+            className="w-full py-2.5 text-sm font-medium text-red-600 bg-red-50
+              border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+          >
+            Logg ut
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
