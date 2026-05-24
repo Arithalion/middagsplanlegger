@@ -13,8 +13,42 @@ export function getWeekNumber(date: Date): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
 }
 
+/** Returnerer mandagen i en gitt ISO-uke */
+export function getISOWeekStart(year: number, week: number): Date {
+  // 4. januar er alltid i uke 1
+  const jan4 = new Date(year, 0, 4)
+  const mondayWeek1 = new Date(jan4)
+  mondayWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7))
+  const result = new Date(mondayWeek1)
+  result.setDate(mondayWeek1.getDate() + (week - 1) * 7)
+  return result
+}
+
+/** Returnerer de 7 datoene (man–søn) for en gitt uke */
+export function getWeekDates(year: number, week: number): Date[] {
+  const monday = getISOWeekStart(year, week)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+}
+
+/** Neste eller forrige uke — håndterer årsskifte */
+export function offsetWeek(year: number, week: number, delta: number): { year: number; week: number } {
+  const date = getISOWeekStart(year, week)
+  date.setDate(date.getDate() + delta * 7)
+  return { year: date.getFullYear(), week: getWeekNumber(date) }
+}
+
+/** Formater dato norsk, kort */
+export function formatDatoKort(date: Date): string {
+  return date.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+}
+
 /** Ukedagnavn norsk */
 export const UKEDAGER = ['mandag','tirsdag','onsdag','torsdag','fredag','lørdag','søndag'] as const
+
 
 /** Formater beløp i NOK */
 export function formatNok(amount: number): string {
