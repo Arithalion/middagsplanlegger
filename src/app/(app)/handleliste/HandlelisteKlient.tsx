@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatNok, formatMengde } from '@/lib/utils'
 import type { Unit } from '@/types/database'
@@ -42,6 +42,12 @@ export default function HandlelisteKlient({
 
   const [lokalItems, setLokalItems] = useState(items)
   const [endringer, setEndringer] = useState<Map<string, boolean>>(new Map())
+
+  // Sync med server-data etter router.refresh()
+  useEffect(() => {
+    setLokalItems(items)
+    setEndringer(new Map())
+  }, [items])
 
   const [genererer, setGenererer] = useState(false)
   const [oppdaterer, setOppdaterer] = useState(false)
