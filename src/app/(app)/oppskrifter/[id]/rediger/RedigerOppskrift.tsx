@@ -84,6 +84,8 @@ export default function RedigerOppskrift({ id, initial }: { id: string; initial:
           })),
       })
     } catch (err) {
+      // redirect() i server actions kaster en intern Next.js-feil — ikke vis den som UI-feil
+      if (err instanceof Error && err.message === 'NEXT_REDIRECT') throw err
       setFeil(err instanceof Error ? err.message : 'En feil oppstod')
       setLaster(false)
     }
