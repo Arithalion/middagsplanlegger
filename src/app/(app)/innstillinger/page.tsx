@@ -22,6 +22,7 @@ export default async function InnstillingerPage() {
         shopping_days: Weekday[]
         special_days: Weekday[]
         weekly_budget: number | null
+        prefer_organic: boolean
       } | null}
       members={(members ?? []) as { id: string; name: string; role: MemberRole; birth_year: number | null; gender: string | null }[]}
       userEmail={user?.email ?? ''}

@@ -10,7 +10,10 @@ type RawListItem = {
   estimated_price: number | null
   is_bought: boolean
   sort_order: number
-  ingredient: { id: string; name: string; category: string | null }
+  packages_needed: number | null
+  is_manual: boolean
+  manual_name: string | null
+  ingredient: { id: string; name: string; category: string | null } | null
 }
 
 type RawList = {
@@ -38,6 +41,7 @@ export default async function HandlelistePage() {
       id, list_date, list_type, status, week_number, year,
       shopping_list_items(
         id, amount, unit, estimated_price, is_bought, sort_order,
+        packages_needed, is_manual, manual_name,
         ingredient:ingredients(id, name, category)
       )
     `)
@@ -73,8 +77,11 @@ export default async function HandlelistePage() {
   }
 
   const items = (aktivListe?.shopping_list_items ?? []).sort((a, b) => {
-    if (a.ingredient.category !== b.ingredient.category)
-      return (a.ingredient.category ?? '').localeCompare(b.ingredient.category ?? '')
+    // Manuelle varer sist
+    if (a.is_manual !== b.is_manual) return a.is_manual ? 1 : -1
+    const katA = a.ingredient?.category ?? 'Annet'
+    const katB = b.ingredient?.category ?? 'Annet'
+    if (katA !== katB) return katA.localeCompare(katB)
     return a.sort_order - b.sort_order
   })
 

@@ -12,7 +12,10 @@ type HandlelisteItem = {
   estimated_price: number | null
   is_bought: boolean
   sort_order: number
-  ingredient: { id: string; name: string; category: string | null }
+  packages_needed: number | null
+  is_manual: boolean
+  manual_name: string | null
+  ingredient: { id: string; name: string; category: string | null } | null
 }
 
 type MealSummaryItem = {
@@ -38,7 +41,6 @@ export default function HandlelisteKlient({
   const [isPending, startTransition] = useTransition()
 
   const [lokalItems, setLokalItems] = useState(items)
-  // Sporer endringer: Map<itemId, is_bought>
   const [endringer, setEndringer] = useState<Map<string, boolean>>(new Map())
 
   const [genererer, setGenererer] = useState(false)
@@ -49,12 +51,24 @@ export default function HandlelisteKlient({
   const [oppsummeringÅpen, setOppsummeringÅpen] = useState(false)
   const [melding, setMelding] = useState('')
 
+  // Manuell tillegg
+  const [visManualModal, setVisManualModal] = useState(false)
+  const [manueltNavn, setManueltNavn] = useState('')
+  const [manueltAntall, setManueltAntall] = useState('1')
+  const [manueltEnhet, setManueltEnhet] = useState('stk')
+  const [leggerTil, setLeggerTil] = useState(false)
+
+  // Beholdningsmodal (post-kjøp)
+  const [visBeholdningModal, setVisBeholdningModal] = useState(false)
+  const [beholdningJust, setBeholdningJust] = useState<Map<string, number>>(new Map())
+  const [fullfører, setFullfører] = useState(false)
+
   function visMelding(tekst: string) {
     setMelding(tekst)
     setTimeout(() => setMelding(''), 3500)
   }
 
-  // ── Toggle is_bought (kun lokalt — lagres med Lagre-knapp) ──
+  // ── Toggle is_bought ──────────────────────────────────────────────────────
   function toggleKjøpt(itemId: string) {
     setLokalItems(prev => prev.map(i =>
       i.id === itemId ? { ...i, is_bought: !i.is_bought } : i
@@ -63,18 +77,14 @@ export default function HandlelisteKlient({
       const ny = new Map(prev)
       const original = items.find(i => i.id === itemId)?.is_bought ?? false
       const nåværende = lokalItems.find(i => i.id === itemId)?.is_bought ?? false
-      // Ny verdi er det motsatte av nåværende
       const nyVerdi = !nåværende
-      if (nyVerdi === original) {
-        ny.delete(itemId) // Tilbake til original — fjern fra endringer
-      } else {
-        ny.set(itemId, nyVerdi)
-      }
+      if (nyVerdi === original) ny.delete(itemId)
+      else ny.set(itemId, nyVerdi)
       return ny
     })
   }
 
-  // ── Lagre endringer ──
+  // ── Lagre endringer ───────────────────────────────────────────────────────
   async function lagreEndringer() {
     if (endringer.size === 0) return
     setLagrer(true)
@@ -89,21 +99,50 @@ export default function HandlelisteKlient({
     visMelding('Endringer lagret ✓')
   }
 
-  // ── Marker hele lista kjøpt ──
-  async function markerAltKjøpt() {
-    if (!listId || !confirm('Marker hele listen som kjøpt og oppdater beholdning?')) return
-    setLokalItems(prev => prev.map(i => ({ ...i, is_bought: true })))
-    setEndringer(new Map())
-    await fetch('/api/shopping-list/mark-all-bought', {
+  // ── Marker hele lista kjøpt — åpner beholdningsmodal ────────────────────
+  function åpneBeholdningModal() {
+    if (!listId) return
+    // Bygg justeringer med default = kjøpt mengde
+    const juster = new Map<string, number>()
+    for (const item of lokalItems) {
+      if (!item.is_bought && !item.is_manual && item.ingredient?.id) {
+        juster.set(item.ingredient.id, item.amount)
+      }
+    }
+    setBeholdningJust(juster)
+    setVisBeholdningModal(true)
+  }
+
+  async function fullførKjøp(oppdaterBeholdning: boolean) {
+    if (!listId) return
+    setFullfører(true)
+
+    const pantryUpdates = oppdaterBeholdning
+      ? lokalItems
+          .filter((i) => !i.is_manual && i.ingredient?.id && !i.is_bought)
+          .map((i) => ({
+            ingredient_id: i.ingredient!.id,
+            amount: beholdningJust.get(i.ingredient!.id) ?? i.amount,
+            unit: i.unit as string,
+          }))
+          .filter((u) => u.amount > 0)
+      : []
+
+    await fetch('/api/shopping-list/ferdig', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ listId }),
+      body: JSON.stringify({ listId, pantryUpdates }),
     })
-    visMelding('Hele listen er kjøpt! Beholdning oppdatert.')
+
+    setLokalItems(prev => prev.map(i => ({ ...i, is_bought: true })))
+    setEndringer(new Map())
+    setVisBeholdningModal(false)
+    setFullfører(false)
+    visMelding(oppdaterBeholdning ? 'Kjøpt! Beholdning oppdatert ✓' : 'Handleliste fullført ✓')
     startTransition(() => router.refresh())
   }
 
-  // ── Tøm handleliste ──
+  // ── Tøm handleliste ───────────────────────────────────────────────────────
   async function tømListe() {
     if (!listId || !confirm('Tøm hele handlelisten? Dette kan ikke angres.')) return
     setTømmer(true)
@@ -116,7 +155,7 @@ export default function HandlelisteKlient({
     startTransition(() => router.refresh())
   }
 
-  // ── Generer ny liste ──
+  // ── Generer ny liste ──────────────────────────────────────────────────────
   async function genererHandleliste() {
     setGenererer(true)
     const res = await fetch('/api/shopping-list/generate', { method: 'POST' })
@@ -126,7 +165,7 @@ export default function HandlelisteKlient({
     startTransition(() => router.refresh())
   }
 
-  // ── Oppdater liste fra ukesmeny ──
+  // ── Oppdater liste fra ukesmeny ───────────────────────────────────────────
   async function oppdaterListe() {
     if (!listId) return
     setOppdaterer(true)
@@ -141,16 +180,45 @@ export default function HandlelisteKlient({
     startTransition(() => router.refresh())
   }
 
+  // ── Legg til manuell vare ─────────────────────────────────────────────────
+  async function leggTilManuelt(e: React.FormEvent) {
+    e.preventDefault()
+    if (!manueltNavn.trim() || !listId) return
+    setLeggerTil(true)
+    const res = await fetch('/api/shopping-list/add-manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        list_id: listId,
+        manual_name: manueltNavn.trim(),
+        amount: parseFloat(manueltAntall) || 1,
+        unit: manueltEnhet,
+      }),
+    })
+    setLeggerTil(false)
+    if (res.ok) {
+      setManueltNavn('')
+      setManueltAntall('1')
+      setManueltEnhet('stk')
+      setVisManualModal(false)
+      visMelding(`${manueltNavn} lagt til ✓`)
+      startTransition(() => router.refresh())
+    }
+  }
+
   const ikkeKjøpt = lokalItems.filter(i => !i.is_bought)
   const kjøpt = lokalItems.filter(i => i.is_bought)
   const harEndringer = endringer.size > 0
 
   const grupper = ikkeKjøpt.reduce<Record<string, HandlelisteItem[]>>((acc, item) => {
-    const kat = item.ingredient.category ?? 'Annet'
+    const kat = item.is_manual ? '📝 Manuelt lagt til' : (item.ingredient?.category ?? 'Annet')
     if (!acc[kat]) acc[kat] = []
     acc[kat].push(item)
     return acc
   }, {})
+
+  // Beregn estimert sum for varer som ikke er kjøpt
+  const estimertGjenstår = ikkeKjøpt.reduce((s, i) => s + (i.estimated_price ?? 0), 0)
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
@@ -175,7 +243,6 @@ export default function HandlelisteKlient({
       {/* Handlinger */}
       {listId && (
         <div className="flex flex-wrap gap-2 mb-5">
-          {/* Lagre-knapp — aktiv kun ved ulagrede endringer */}
           <button
             onClick={lagreEndringer}
             disabled={!harEndringer || lagrer}
@@ -185,7 +252,7 @@ export default function HandlelisteKlient({
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
           >
             {lagrer ? '…' : '💾'}
-            {lagrer ? 'Lagrer…' : harEndringer ? `Lagre endringer (${endringer.size})` : 'Ingen endringer'}
+            {lagrer ? 'Lagrer…' : harEndringer ? `Lagre (${endringer.size})` : 'Ingen endringer'}
           </button>
 
           <button
@@ -196,6 +263,15 @@ export default function HandlelisteKlient({
               hover:bg-blue-100 transition-colors disabled:opacity-50"
           >
             {oppdaterer ? '…' : '🔄'} {oppdaterer ? 'Oppdaterer…' : 'Oppdater fra meny'}
+          </button>
+
+          <button
+            onClick={() => setVisManualModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium
+              bg-amber-50 text-amber-700 border border-amber-200 rounded-xl
+              hover:bg-amber-100 transition-colors"
+          >
+            ✏️ Legg til manuelt
           </button>
 
           <button
@@ -214,8 +290,16 @@ export default function HandlelisteKlient({
               bg-red-50 text-red-600 border border-red-200 rounded-xl
               hover:bg-red-100 transition-colors disabled:opacity-50 ml-auto"
           >
-            {tømmer ? '…' : '🗑️'} {tømmer ? 'Tømmer…' : 'Tøm liste'}
+            {tømmer ? '…' : '🗑️'} {tømmer ? 'Tømmer…' : 'Tøm'}
           </button>
+        </div>
+      )}
+
+      {/* Prisestimat */}
+      {listId && estimertGjenstår > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 mb-4 flex items-center justify-between">
+          <span className="text-sm text-green-700">Estimert gjenstående</span>
+          <span className="text-sm font-semibold text-green-900">{formatNok(estimertGjenstår)}</span>
         </div>
       )}
 
@@ -274,7 +358,7 @@ export default function HandlelisteKlient({
             <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center mb-4">
               <p className="text-2xl mb-2">🎉</p>
               <p className="font-medium text-green-800">Alt er plukket!</p>
-              <p className="text-sm text-green-600 mt-1">Husk å lagre og trykk «Hele lista kjøpt» i kassen.</p>
+              <p className="text-sm text-green-600 mt-1">Trykk «Hele lista kjøpt» for å oppdatere beholdningen.</p>
             </div>
           ) : (
             Object.entries(grupper).map(([kategori, vareListe]) => (
@@ -327,11 +411,11 @@ export default function HandlelisteKlient({
           <div className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between gap-4">
             {totalEstimert > 0 && (
               <p className="text-sm text-gray-500">
-                Estimert: <span className="font-semibold text-gray-900">{formatNok(totalEstimert)}</span>
+                Total estimert: <span className="font-semibold text-gray-900">{formatNok(totalEstimert)}</span>
               </p>
             )}
             <button
-              onClick={markerAltKjøpt}
+              onClick={åpneBeholdningModal}
               disabled={isPending || lokalItems.every(i => i.is_bought)}
               className="ml-auto px-4 py-2 bg-green-600 text-white text-sm font-medium
                 rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40"
@@ -341,11 +425,148 @@ export default function HandlelisteKlient({
           </div>
         </>
       )}
+
+      {/* ── Beholdningsmodal (post-kjøp) ── */}
+      {visBeholdningModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Legg til i beholdning?</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Juster mengdene du vil lagre — alt overskudd fra handleturen.
+              </p>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5 space-y-3">
+              {lokalItems
+                .filter((i) => !i.is_bought && !i.is_manual && i.ingredient?.id)
+                .map((item) => (
+                  <div key={item.id} className="flex items-center gap-3">
+                    <span className="flex-1 text-sm text-gray-900">{item.ingredient!.name}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      value={beholdningJust.get(item.ingredient!.id) ?? item.amount}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value)
+                        setBeholdningJust((prev) => {
+                          const ny = new Map(prev)
+                          ny.set(item.ingredient!.id, isNaN(v) ? 0 : v)
+                          return ny
+                        })
+                      }}
+                      className="w-20 text-sm rounded-lg border border-gray-300 px-2 py-1
+                        focus:outline-none focus:ring-2 focus:ring-green-500 text-right"
+                    />
+                    <span className="text-sm text-gray-500 w-12 shrink-0">{item.unit}</span>
+                  </div>
+                ))}
+
+              {lokalItems.filter((i) => !i.is_bought && !i.is_manual && i.ingredient?.id).length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">Ingen ingrediensvarer å legge til</p>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-100 flex flex-col gap-2">
+              <button
+                onClick={() => fullførKjøp(true)}
+                disabled={fullfører}
+                className="w-full py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl
+                  hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {fullfører ? 'Lagrer…' : '🥕 Legg til i beholdning og fullfør'}
+              </button>
+              <button
+                onClick={() => fullførKjøp(false)}
+                disabled={fullfører}
+                className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                Fullfør uten beholdningsoppdatering
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Manuell tillegg-modal ── */}
+      {visManualModal && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setVisManualModal(false) }}
+        >
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Legg til manuelt</h2>
+              <button
+                onClick={() => setVisManualModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-lg"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={leggTilManuelt} className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Varenavn *</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={manueltNavn}
+                  onChange={(e) => setManueltNavn(e.target.value)}
+                  placeholder="f.eks. Kjøkkenpapir"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                    focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Antall</label>
+                  <input
+                    type="number"
+                    value={manueltAntall}
+                    onChange={(e) => setManueltAntall(e.target.value)}
+                    min={0.1}
+                    step="0.5"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Enhet</label>
+                  <select
+                    value={manueltEnhet}
+                    onChange={(e) => setManueltEnhet(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="stk">stk</option>
+                    <option value="pose">pose</option>
+                    <option value="pk">pk</option>
+                    <option value="liter">liter</option>
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="dl">dl</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={leggerTil || !manueltNavn.trim()}
+                className="w-full py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl
+                  hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {leggerTil ? 'Legger til…' : 'Legg til'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Varerad ──────────────────────────────────────────────────
+// ─── VareRad ──────────────────────────────────────────────────────────────────
 
 function VareRad({ item, border, onToggle, variant, erEndret }: {
   item: HandlelisteItem
@@ -354,6 +575,9 @@ function VareRad({ item, border, onToggle, variant, erEndret }: {
   variant: 'aktiv' | 'kjøpt'
   erEndret: boolean
 }) {
+  const navn = item.is_manual ? (item.manual_name ?? 'Ukjent') : (item.ingredient?.name ?? 'Ukjent')
+  const isPriced = item.estimated_price != null
+
   return (
     <button
       onClick={() => onToggle(item.id)}
@@ -363,6 +587,7 @@ function VareRad({ item, border, onToggle, variant, erEndret }: {
         ${variant === 'kjøpt' ? 'bg-gray-50/60' : 'hover:bg-gray-50/40'}
         ${erEndret ? 'bg-amber-50/40' : ''}`}
     >
+      {/* Checkbox */}
       <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
         variant === 'kjøpt' ? 'bg-green-500 border-green-500' : 'border-gray-300'
       }`}>
@@ -373,23 +598,28 @@ function VareRad({ item, border, onToggle, variant, erEndret }: {
         )}
       </span>
 
-      <span className={`flex-1 text-sm font-medium ${
-        variant === 'kjøpt' ? 'line-through text-gray-400' : 'text-gray-900'
-      }`}>
-        {item.ingredient.name}
+      {/* Navn + pris */}
+      <span className="flex-1 min-w-0">
+        <span className={`block text-sm font-medium ${
+          variant === 'kjøpt' ? 'line-through text-gray-400' : 'text-gray-900'
+        }`}>
+          {item.is_manual && <span className="text-amber-500 mr-1">✏️</span>}
+          {navn}
+        </span>
+        {isPriced && variant === 'aktiv' && (
+          <span className="text-xs italic text-gray-400">
+            {item.packages_needed != null ? `${item.packages_needed} pk · ` : ''}
+            {formatNok(item.estimated_price!)}
+          </span>
+        )}
       </span>
 
       {erEndret && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Ulagret endring" />}
 
+      {/* Mengde */}
       <span className={`text-sm shrink-0 ${variant === 'kjøpt' ? 'text-gray-300' : 'text-gray-500'}`}>
         {formatMengde(item.amount, item.unit)}
       </span>
-
-      {item.estimated_price != null && (
-        <span className={`text-sm shrink-0 w-14 text-right ${variant === 'kjøpt' ? 'text-gray-300' : 'text-gray-400'}`}>
-          {formatNok(item.estimated_price)}
-        </span>
-      )}
 
       {variant === 'kjøpt' && (
         <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

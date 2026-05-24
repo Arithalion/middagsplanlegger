@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { UKEDAGER, KATEGORI_FARGER, KATEGORI_LABELS, formatDatoKort } from '@/lib/utils'
+import { UKEDAGER, KATEGORI_FARGER, KATEGORI_LABELS, formatDatoKort, formatNok } from '@/lib/utils'
 import KategoriBadge from '@/components/ui/KategoriBadge'
 import type { RecipeCategory, Weekday } from '@/types/database'
 import { setMealPlan, removeMealPlan, updateMealPlanServings } from '@/lib/actions/meal-plans'
@@ -31,6 +31,7 @@ interface Props {
   nextWeekDates: string[]
   today: string
   defaultServings: number
+  costMap: Record<string, number>
 }
 
 const HELGEKATEGORIER: RecipeCategory[] = ['helgemat', 'søndagsmiddag', 'selskapsmat']
@@ -41,7 +42,7 @@ export default function PlanleggerKlient({
   thisPlanMap, nextPlanMap,
   oppskrifter, defaultSpecialDays, fishDaysPerWeek,
   thisWeekDates, nextWeekDates, today,
-  defaultServings,
+  defaultServings, costMap,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -195,6 +196,7 @@ export default function PlanleggerKlient({
         fishCount={fishCount(thisWeek, thisYear)}
         fishDaysPerWeek={fishDaysPerWeek}
         defaultServings={defaultServings}
+        costMap={costMap}
         onVelg={(dag) => setValgt({ dag, week: thisWeek, year: thisYear })}
         onFjern={(id, dag) => fjernOppskrift(id, dag, thisWeek, thisYear)}
         onJusterPorsjoner={(planId, dag, delta, current, recipeServings) =>
@@ -214,6 +216,7 @@ export default function PlanleggerKlient({
         fishCount={fishCount(nextWeek, nextYear)}
         fishDaysPerWeek={fishDaysPerWeek}
         defaultServings={defaultServings}
+        costMap={costMap}
         onVelg={(dag) => setValgt({ dag, week: nextWeek, year: nextYear })}
         onFjern={(id, dag) => fjernOppskrift(id, dag, nextWeek, nextYear)}
         onJusterPorsjoner={(planId, dag, delta, current, recipeServings) =>
@@ -276,7 +279,7 @@ export default function PlanleggerKlient({
 function UkeSeksjon({
   tittel, week, year, planMap, datoer, todayDate,
   defaultSpecialDays, fishCount, fishDaysPerWeek,
-  defaultServings, onVelg, onFjern, onJusterPorsjoner,
+  defaultServings, costMap, onVelg, onFjern, onJusterPorsjoner,
 }: {
   tittel: string
   week: number
@@ -288,18 +291,27 @@ function UkeSeksjon({
   fishCount: number
   fishDaysPerWeek: number
   defaultServings: number
+  costMap: Record<string, number>
   onVelg: (dag: Weekday) => void
   onFjern: (id: string, dag: Weekday) => void
   onJusterPorsjoner: (planId: string, dag: Weekday, delta: number, current: number | null, recipeServings: number) => void
 }) {
+  // Beregn ukestotal fra costMap for planlagte måltider
+  const ukesTotal = Object.values(planMap)
+    .reduce((sum, plan) => sum + (plan.recipe?.id ? (costMap[plan.recipe.id] ?? 0) : 0), 0)
+
   return (
     <div className="mb-6">
       <div className="flex items-center gap-3 mb-2 px-1">
         <h2 className="font-semibold text-gray-900">{tittel}</h2>
         <span className="text-sm text-gray-400">uke {week}</span>
-        <span className="ml-auto text-xs text-gray-400">
-          🐟 {fishCount}/{fishDaysPerWeek}
-        </span>
+        <span className="text-xs text-gray-400">🐟 {fishCount}/{fishDaysPerWeek}</span>
+        {ukesTotal > 0 && (
+          <span className="ml-auto text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+            ~{formatNok(ukesTotal)}
+          </span>
+        )}
+        {ukesTotal === 0 && <span className="ml-auto" />}
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -310,6 +322,7 @@ function UkeSeksjon({
           const isSpecial = defaultSpecialDays.includes(dag)
           const effectiveServings = plan?.servings ?? defaultServings
           const isNonStandard = plan?.recipe != null && effectiveServings !== plan.recipe.servings
+          const mealCost = plan?.recipe?.id ? (costMap[plan.recipe.id] ?? null) : null
 
           return (
             <div
@@ -325,7 +338,7 @@ function UkeSeksjon({
                 <p className="text-xs text-gray-400">{formatDatoKort(dato)}</p>
               </div>
 
-              {/* Middag + porsjoner */}
+              {/* Middag + porsjoner + kostnad */}
               <div className="flex-1 min-w-0">
                 {plan?.recipe ? (
                   <>
@@ -338,28 +351,36 @@ function UkeSeksjon({
                       {plan.recipe.category === 'vegetar' && <span className="text-sm">🥦</span>}
                       {isSpecial && <span className="text-sm">⭐</span>}
                     </div>
-                    {/* Porsjonsvelger */}
-                    {plan.id && (
-                      <div className="flex items-center gap-0.5 mt-1">
-                        <button
-                          onClick={() => onJusterPorsjoner(plan.id, dag, -1, plan.servings, plan.recipe!.servings)}
-                          className="w-5 h-5 flex items-center justify-center rounded-full
-                            bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
-                            leading-none transition-colors"
-                          aria-label="Færre porsjoner"
-                        >−</button>
-                        <span className={`text-xs px-1 tabular-nums ${isNonStandard ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
-                          👥 {effectiveServings}
+                    <div className="flex items-center gap-2 mt-1">
+                      {/* Porsjonsvelger */}
+                      {plan.id && (
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => onJusterPorsjoner(plan.id, dag, -1, plan.servings, plan.recipe!.servings)}
+                            className="w-5 h-5 flex items-center justify-center rounded-full
+                              bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
+                              leading-none transition-colors"
+                            aria-label="Færre porsjoner"
+                          >−</button>
+                          <span className={`text-xs px-1 tabular-nums ${isNonStandard ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
+                            👥 {effectiveServings}
+                          </span>
+                          <button
+                            onClick={() => onJusterPorsjoner(plan.id, dag, +1, plan.servings, plan.recipe!.servings)}
+                            className="w-5 h-5 flex items-center justify-center rounded-full
+                              bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
+                              leading-none transition-colors"
+                            aria-label="Flere porsjoner"
+                          >+</button>
+                        </div>
+                      )}
+                      {/* Kostnad per måltid */}
+                      {mealCost != null && (
+                        <span className="text-xs text-gray-400 italic">
+                          ~{formatNok(mealCost)}
                         </span>
-                        <button
-                          onClick={() => onJusterPorsjoner(plan.id, dag, +1, plan.servings, plan.recipe!.servings)}
-                          className="w-5 h-5 flex items-center justify-center rounded-full
-                            bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
-                            leading-none transition-colors"
-                          aria-label="Flere porsjoner"
-                        >+</button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </>
                 ) : (
                   <span className="text-sm text-gray-400 italic">Ikke planlagt</span>

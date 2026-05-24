@@ -61,6 +61,53 @@ export function formatMengde(amount: number, unit: string): string {
   return `${n} ${unit}`
 }
 
+/** Konverter mengde til basisenhet (g for masse, ml for volum, stk for stykkvarer) */
+export function tilBaseEnhet(amount: number, unit: string): { amount: number; baseUnit: string } {
+  const u = unit.toLowerCase().trim()
+  if (u === 'g')    return { amount, baseUnit: 'g' }
+  if (u === 'kg')   return { amount: amount * 1000, baseUnit: 'g' }
+  if (u === 'hg')   return { amount: amount * 100, baseUnit: 'g' }
+  if (u === 'mg')   return { amount: amount / 1000, baseUnit: 'g' }
+  if (u === 'ml')   return { amount, baseUnit: 'ml' }
+  if (u === 'cl')   return { amount: amount * 10, baseUnit: 'ml' }
+  if (u === 'dl')   return { amount: amount * 100, baseUnit: 'ml' }
+  if (u === 'l' || u === 'liter') return { amount: amount * 1000, baseUnit: 'ml' }
+  return { amount, baseUnit: u } // stk, ss, ts etc.
+}
+
+/**
+ * Beregn estimert kostnad for en oppskrift (per porsjon × antall porsjoner).
+ * Returnerer null om ingen ingredienser har pris.
+ */
+export function beregnOppskriftKostnad(
+  ingredients: { amount: number; unit: string; price_per_unit: number | null; price_unit: string | null }[],
+  recipeServings: number,
+  targetServings: number,
+): number | null {
+  const scale = recipeServings > 0 ? targetServings / recipeServings : 1
+  let total = 0
+  let harPris = false
+
+  for (const ing of ingredients) {
+    if (ing.price_per_unit == null || ing.price_unit == null) continue
+
+    const scaled = ing.amount * scale
+    const { amount: recipeBase, baseUnit: recipeBase2 } = tilBaseEnhet(scaled, ing.unit)
+    const { amount: priceBase, baseUnit: priceBase2 } = tilBaseEnhet(1, ing.price_unit)
+
+    // Sjekk at basisenhetene matcher
+    if (recipeBase2 !== priceBase2) continue
+
+    // Konverter price_per_unit fra kr/<price_unit> til kr/<baseUnit>
+    const pricePerBase = ing.price_per_unit / priceBase
+
+    total += recipeBase * pricePerBase
+    harPris = true
+  }
+
+  return harPris ? total : null
+}
+
 /** Dager til utløp */
 export function dagerTilUtlop(date: string): number {
   const today = new Date()

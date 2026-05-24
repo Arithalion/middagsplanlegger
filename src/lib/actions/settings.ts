@@ -11,6 +11,7 @@ export async function updateHouseholdSettings(data: {
   always_vegetables?: boolean
   shopping_days?: Weekday[]
   special_days?: Weekday[]
+  prefer_organic?: boolean
 }) {
   const supabase = await createClient()
 
@@ -31,6 +32,7 @@ export async function updateHouseholdSettings(data: {
       always_vegetables?: boolean
       shopping_days?: string[]
       special_days?: string[]
+      prefer_organic?: boolean
     } = { household_id: householdId }
 
     if (settingsFields.weekly_budget !== undefined) upsertPayload.weekly_budget = settingsFields.weekly_budget
@@ -38,6 +40,7 @@ export async function updateHouseholdSettings(data: {
     if (settingsFields.always_vegetables !== undefined) upsertPayload.always_vegetables = settingsFields.always_vegetables
     if (settingsFields.shopping_days !== undefined) upsertPayload.shopping_days = settingsFields.shopping_days as string[]
     if (settingsFields.special_days !== undefined) upsertPayload.special_days = settingsFields.special_days as string[]
+    if (settingsFields.prefer_organic !== undefined) upsertPayload.prefer_organic = settingsFields.prefer_organic
 
     await supabase
       .from('household_settings')

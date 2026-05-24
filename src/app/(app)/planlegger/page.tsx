@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getWeekNumber, offsetWeek, getWeekDates } from '@/lib/utils'
+import { getWeekNumber, offsetWeek, getWeekDates, beregnOppskriftKostnad } from '@/lib/utils'
 import PlanleggerKlient from './PlanleggerKlient'
 import type { RecipeCategory, Weekday } from '@/types/database'
 
@@ -28,7 +28,7 @@ export default async function PlanleggerPage() {
   const thisYear = now.getFullYear()
   const { week: nextWeek, year: nextYear } = offsetWeek(thisYear, thisWeek, 1)
 
-  const [{ data: rawSettings }, { data: rawMealPlans }, { data: rawRecipes }, { count: memberCount }] = await Promise.all([
+  const [{ data: rawSettings }, { data: rawMealPlans }, { data: rawRecipes }, { count: memberCount }, { data: rawPrices }, { data: rawRecipeIngredients }] = await Promise.all([
     supabase
       .from('household_settings')
       .select('special_days, fish_days_per_week, always_vegetables')
@@ -46,6 +46,14 @@ export default async function PlanleggerPage() {
     supabase
       .from('household_members')
       .select('id', { count: 'exact', head: true }),
+    // Priser per ingrediens
+    supabase
+      .from('ingredient_prices')
+      .select('ingredient_id, price_per_unit, unit'),
+    // Ingredienser per oppskrift for planlagte uker
+    supabase
+      .from('recipe_ingredients')
+      .select('recipe_id, ingredient_id, amount, unit'),
   ])
 
   const settings = rawSettings as { special_days: string[]; fish_days_per_week: number } | null
@@ -87,6 +95,47 @@ export default async function PlanleggerPage() {
     return { id: r.id, name: r.name, category: r.category as RecipeCategory, avg_rating: avg }
   })
 
+  // ── Kostnad per oppskrift ─────────────────────────────────────────────────
+  type RawPrice = { ingredient_id: string; price_per_unit: number; unit: string }
+  type RawRI = { recipe_id: string; ingredient_id: string; amount: number; unit: string }
+
+  const priceMap = new Map<string, { price_per_unit: number; unit: string }>(
+    ((rawPrices ?? []) as unknown as RawPrice[]).map((p) => [
+      p.ingredient_id,
+      { price_per_unit: p.price_per_unit, unit: p.unit },
+    ])
+  )
+
+  // Grupper recipe_ingredients per recipe_id
+  const riByRecipe = new Map<string, { amount: number; unit: string; price_per_unit: number | null; price_unit: string | null }[]>()
+  for (const ri of ((rawRecipeIngredients ?? []) as unknown as RawRI[])) {
+    const price = priceMap.get(ri.ingredient_id)
+    const entry = {
+      amount: ri.amount,
+      unit: ri.unit,
+      price_per_unit: price?.price_per_unit ?? null,
+      price_unit: price?.unit ?? null,
+    }
+    const existing = riByRecipe.get(ri.recipe_id)
+    if (existing) existing.push(entry)
+    else riByRecipe.set(ri.recipe_id, [entry])
+  }
+
+  // Beregn kostnad per recipe_id for de planlagte oppskriftene
+  const costMap: Record<string, number> = {}
+  for (const plan of allPlans) {
+    if (!plan.recipe?.id) continue
+    const recipeId = plan.recipe.id
+    if (costMap[recipeId] !== undefined) continue // allerede beregnet
+
+    const ris = riByRecipe.get(recipeId)
+    if (!ris) continue
+
+    const targetServings = plan.servings ?? defaultServings
+    const cost = beregnOppskriftKostnad(ris, plan.recipe.servings, targetServings)
+    if (cost !== null) costMap[recipeId] = cost
+  }
+
   const defaultSpecialDays = (settings?.special_days ?? ['fredag', 'lørdag']) as Weekday[]
   const fishDaysPerWeek = settings?.fish_days_per_week ?? 2
 
@@ -105,6 +154,7 @@ export default async function PlanleggerPage() {
       nextWeekDates={getWeekDates(nextYear, nextWeek).map(d => d.toISOString())}
       today={new Date().toISOString()}
       defaultServings={defaultServings}
+      costMap={costMap}
     />
   )
 }

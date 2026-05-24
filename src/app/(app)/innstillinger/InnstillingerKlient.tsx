@@ -20,6 +20,7 @@ interface Props {
     shopping_days: Weekday[]
     special_days: Weekday[]
     weekly_budget: number | null
+    prefer_organic: boolean
   } | null
   members: { id: string; name: string; role: MemberRole; birth_year: number | null; gender: string | null }[]
   userEmail: string
@@ -36,6 +37,7 @@ export default function InnstillingerKlient({ household, settings, members, user
   // Kosthold
   const [fiskedager, setFiskedager] = useState(settings?.fish_days_per_week ?? 2)
   const [alltidGronn, setAlltidGronn] = useState(settings?.always_vegetables ?? true)
+  const [preferOrganic, setPreferOrganic] = useState(settings?.prefer_organic ?? false)
   const [handledager, setHandledager] = useState<Weekday[]>(settings?.shopping_days ?? ['lørdag'])
   const [spesialdager, setSpesialdager] = useState<Weekday[]>(settings?.special_days ?? ['fredag','lørdag'])
   const [ukesbudsjett, setUkesbudsjett] = useState(settings?.weekly_budget?.toString() ?? '')
@@ -67,6 +69,7 @@ export default function InnstillingerKlient({ household, settings, members, user
         shopping_days: handledager,
         special_days: spesialdager,
         weekly_budget: ukesbudsjett ? parseFloat(ukesbudsjett) : null,
+        prefer_organic: preferOrganic,
       })
       setMelding('Innstillinger lagret!')
       startTransition(() => router.refresh())
@@ -225,6 +228,28 @@ export default function InnstillingerKlient({ household, settings, members, user
       {/* ── Kosthold ── */}
       {aktivTab === 'kosthold' && (
         <div className="space-y-5">
+          <div className="bg-white rounded-2xl border border-gray-200 p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">Foretrekk økologisk 🌿</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Kassal-søk viser økologiske produkter øverst
+                </p>
+              </div>
+              <button
+                onClick={() => setPreferOrganic(!preferOrganic)}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  preferOrganic ? 'bg-green-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 inline-block h-5 w-5 rounded-full bg-white
+                    shadow transform transition-transform ${preferOrganic ? 'translate-x-5' : ''}`}
+                />
+              </button>
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl border border-gray-200 p-5">
             <div className="flex items-start justify-between">
               <div>
