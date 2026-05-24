@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import HandlelisteKlient from './HandlelisteKlient'
+import { getWeekDates, formatDatoKort } from '@/lib/utils'
 import type { Unit } from '@/types/database'
 
 type RawListItem = {
@@ -22,6 +23,12 @@ type RawList = {
   shopping_list_items: RawListItem[]
 }
 
+type MealSummaryItem = {
+  weekday: string
+  dato: string
+  recipeName: string | null
+}
+
 export default async function HandlelistePage() {
   const supabase = await createClient()
 
@@ -36,15 +43,38 @@ export default async function HandlelistePage() {
     `)
     .eq('status', 'aktiv')
     .order('created_at', { ascending: false })
-    .limit(5)
+    .limit(1)
 
   const lists = (rawLists ?? []) as unknown as RawList[]
   const aktivListe = lists[0] ?? null
 
-  const items = (aktivListe?.shopping_list_items ?? []).sort((a, b) => {
-    if (a.ingredient.category !== b.ingredient.category) {
-      return (a.ingredient.category ?? '').localeCompare(b.ingredient.category ?? '')
+  // Hent middager for listens uke (for oppsummering)
+  let mealSummary: MealSummaryItem[] = []
+  if (aktivListe?.week_number && aktivListe?.year) {
+    const { data: rawPlans } = await supabase
+      .from('meal_plans')
+      .select('weekday, recipe:recipes(name)')
+      .eq('week_number', aktivListe.week_number)
+      .eq('year', aktivListe.year)
+
+    const datoer = getWeekDates(aktivListe.year, aktivListe.week_number)
+    const UKEDAGER = ['mandag','tirsdag','onsdag','torsdag','fredag','lørdag','søndag']
+
+    const planMap = new Map<string, string>()
+    for (const p of (rawPlans ?? []) as unknown as { weekday: string; recipe: { name: string } | null }[]) {
+      if (p.recipe) planMap.set(p.weekday, p.recipe.name)
     }
+
+    mealSummary = UKEDAGER.map((dag, i) => ({
+      weekday: dag,
+      dato: formatDatoKort(datoer[i]),
+      recipeName: planMap.get(dag) ?? null,
+    })).filter(m => m.recipeName !== null)
+  }
+
+  const items = (aktivListe?.shopping_list_items ?? []).sort((a, b) => {
+    if (a.ingredient.category !== b.ingredient.category)
+      return (a.ingredient.category ?? '').localeCompare(b.ingredient.category ?? '')
     return a.sort_order - b.sort_order
   })
 
@@ -55,8 +85,10 @@ export default async function HandlelistePage() {
       listId={aktivListe?.id ?? null}
       listType={aktivListe?.list_type ?? null}
       weekNumber={aktivListe?.week_number ?? null}
+      year={aktivListe?.year ?? null}
       items={items}
       totalEstimert={totalEstimert}
+      mealSummary={mealSummary}
     />
   )
 }
