@@ -21,6 +21,7 @@ interface Props {
     special_days: Weekday[]
     weekly_budget: number | null
     prefer_organic: boolean
+    shopping_after_dinner: boolean
   } | null
   members: { id: string; name: string; role: MemberRole; birth_year: number | null; gender: string | null }[]
   userEmail: string
@@ -39,6 +40,7 @@ export default function InnstillingerKlient({ household, settings, members, user
   const [alltidGronn, setAlltidGronn] = useState(settings?.always_vegetables ?? true)
   const [preferOrganic, setPreferOrganic] = useState(settings?.prefer_organic ?? false)
   const [handledager, setHandledager] = useState<Weekday[]>(settings?.shopping_days ?? ['lørdag'])
+  const [shoppingEtterMiddag, setShoppingEtterMiddag] = useState(settings?.shopping_after_dinner ?? false)
   const [spesialdager, setSpesialdager] = useState<Weekday[]>(settings?.special_days ?? ['fredag','lørdag'])
   const [ukesbudsjett, setUkesbudsjett] = useState(settings?.weekly_budget?.toString() ?? '')
 
@@ -67,6 +69,7 @@ export default function InnstillingerKlient({ household, settings, members, user
         fish_days_per_week: fiskedager,
         always_vegetables: alltidGronn,
         shopping_days: handledager,
+        shopping_after_dinner: shoppingEtterMiddag,
         special_days: spesialdager,
         weekly_budget: ukesbudsjett ? parseFloat(ukesbudsjett) : null,
         prefer_organic: preferOrganic,
@@ -152,9 +155,9 @@ export default function InnstillingerKlient({ household, settings, members, user
           <InvitasjonskodeBoks kode={household?.invite_code ?? null} />
 
           <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-900 mb-4">Handledager</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">Handledager</h3>
             <p className="text-sm text-gray-500 mb-3">Hvilke dager handler dere vanligvis?</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-4">
               {ALLE_UKEDAGER.map((dag) => (
                 <button
                   key={dag}
@@ -168,6 +171,33 @@ export default function InnstillingerKlient({ household, settings, members, user
                   {dag}
                 </button>
               ))}
+            </div>
+
+            {/* Handler etter middag */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Handler etter middag 🌙</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Slå på om du bruker varene fra neste dag — listen starter da dagen etter handledagen
+                </p>
+              </div>
+              <button
+                onClick={() => setShoppingEtterMiddag(!shoppingEtterMiddag)}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  shoppingEtterMiddag ? 'bg-green-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 inline-block h-5 w-5 rounded-full bg-white
+                    shadow transform transition-transform ${shoppingEtterMiddag ? 'translate-x-5' : ''}`}
+                />
+              </button>
+            </div>
+
+            {/* Info-boks */}
+            <div className="mt-4 px-3 py-2.5 bg-blue-50 rounded-xl text-xs text-blue-700 leading-relaxed">
+              Handlelisten genereres automatisk for dagene frem til neste handletur.
+              Endrer du handledag, tøm og generer handlelisten på nytt.
             </div>
           </div>
 

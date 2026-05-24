@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getWeekNumber } from '@/lib/utils'
-import { beregnHandleliste } from '@/lib/utils/shopping'
+import { beregnHandleliste, beregnHandleperiode } from '@/lib/utils/shopping'
 
 export async function POST() {
   const supabase = await createClient()
@@ -10,23 +10,51 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: 'Ikke innlogget' }, { status: 401 })
 
   const now = new Date()
-  const weekNumber = getWeekNumber(now)
-  const year = now.getFullYear()
 
-  const shoppingItems = await beregnHandleliste(supabase, weekNumber, year)
+  // ── Hent innstillinger ────────────────────────────────────────────────────
+  const { data: settings } = await supabase
+    .from('household_settings')
+    .select('shopping_days, shopping_after_dinner')
+    .maybeSingle()
+
+  const shoppingDays: string[] = (settings?.shopping_days as string[] | null) ?? []
+  const shoppingAfterDinner: boolean = (settings?.shopping_after_dinner as boolean | null) ?? false
+
+  // ── Beregn handleperiode eller fall tilbake til inneværende uke ───────────
+  const periode = shoppingDays.length > 0
+    ? beregnHandleperiode(shoppingDays, shoppingAfterDinner, now)
+    : null
+
+  let shoppingItems: Awaited<ReturnType<typeof beregnHandleliste>>
+  let periodeLabel: string
+
+  if (periode) {
+    shoppingItems = await beregnHandleliste(supabase, periode.days)
+    periodeLabel = periode.label
+  } else {
+    // Ingen handledager satt — bruk inneværende uke
+    const weekNumber = getWeekNumber(now)
+    const year = now.getFullYear()
+    shoppingItems = await beregnHandleliste(supabase, weekNumber, year)
+    periodeLabel = `uke ${getWeekNumber(now)}`
+  }
 
   if (shoppingItems.length === 0) {
     return NextResponse.json({ message: 'Alt er allerede på lager!', list_id: null })
   }
 
+  // ── Opprett handleliste ───────────────────────────────────────────────────
   const { data: householdId } = await supabase.rpc('my_household_id')
+
+  const weekNumber = getWeekNumber(periode?.fromDate ?? now)
+  const year = (periode?.fromDate ?? now).getFullYear()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: list, error: listError } = await (supabase as any)
     .from('shopping_lists')
     .insert({
       household_id: householdId,
-      list_date: now.toISOString().split('T')[0],
+      list_date: (periode?.fromDate ?? now).toISOString().split('T')[0],
       list_type: 'hoved',
       week_number: weekNumber,
       year,
@@ -52,5 +80,8 @@ export async function POST() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any).from('shopping_list_items').insert(items)
 
-  return NextResponse.json({ message: 'Handleliste generert!', list_id: list.id })
+  return NextResponse.json({
+    message: `Handleliste for ${periodeLabel} generert!`,
+    list_id: list.id,
+  })
 }

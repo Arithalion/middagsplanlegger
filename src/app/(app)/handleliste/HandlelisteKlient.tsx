@@ -183,13 +183,13 @@ export default function HandlelisteKlient({
   // ── Legg til manuell vare ─────────────────────────────────────────────────
   async function leggTilManuelt(e: React.FormEvent) {
     e.preventDefault()
-    if (!manueltNavn.trim() || !listId) return
+    if (!manueltNavn.trim()) return
     setLeggerTil(true)
     const res = await fetch('/api/shopping-list/add-manual', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        list_id: listId,
+        list_id: listId ?? null,
         manual_name: manueltNavn.trim(),
         amount: parseFloat(manueltAntall) || 1,
         unit: manueltEnhet,
@@ -210,8 +210,11 @@ export default function HandlelisteKlient({
   const kjøpt = lokalItems.filter(i => i.is_bought)
   const harEndringer = endringer.size > 0
 
-  const grupper = ikkeKjøpt.reduce<Record<string, HandlelisteItem[]>>((acc, item) => {
-    const kat = item.is_manual ? '📝 Manuelt lagt til' : (item.ingredient?.category ?? 'Annet')
+  const ikkeKjøptAuto = ikkeKjøpt.filter(i => !i.is_manual)
+  const ikkeKjøptManuell = ikkeKjøpt.filter(i => i.is_manual)
+
+  const grupper = ikkeKjøptAuto.reduce<Record<string, HandlelisteItem[]>>((acc, item) => {
+    const kat = item.ingredient?.category ?? 'Annet'
     if (!acc[kat]) acc[kat] = []
     acc[kat].push(item)
     return acc
@@ -263,15 +266,6 @@ export default function HandlelisteKlient({
               hover:bg-blue-100 transition-colors disabled:opacity-50"
           >
             {oppdaterer ? '…' : '🔄'} {oppdaterer ? 'Oppdaterer…' : 'Oppdater fra meny'}
-          </button>
-
-          <button
-            onClick={() => setVisManualModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium
-              bg-amber-50 text-amber-700 border border-amber-200 rounded-xl
-              hover:bg-amber-100 transition-colors"
-          >
-            ✏️ Legg til manuelt
           </button>
 
           <button
@@ -338,92 +332,123 @@ export default function HandlelisteKlient({
         </div>
       )}
 
-      {!listId ? (
-        <div className="text-center py-16">
-          <p className="text-4xl mb-3">🛒</p>
-          <p className="text-gray-500 font-medium mb-4">Ingen aktiv handleliste</p>
-          <button
-            onClick={genererHandleliste}
-            disabled={genererer}
-            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-xl
-              hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            {genererer ? 'Genererer…' : 'Generer fra ukesplan'}
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Aktiv liste */}
-          {ikkeKjøpt.length === 0 ? (
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center mb-4">
-              <p className="text-2xl mb-2">🎉</p>
-              <p className="font-medium text-green-800">Alt er plukket!</p>
-              <p className="text-sm text-green-600 mt-1">Trykk «Hele lista kjøpt» for å oppdatere beholdningen.</p>
-            </div>
-          ) : (
-            Object.entries(grupper).map(([kategori, vareListe]) => (
-              <div key={kategori} className="mb-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2 px-1">
-                  {kategori}
-                </h3>
-                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                  {vareListe.map((item, i) => (
-                    <VareRad key={item.id} item={item} border={i > 0} onToggle={toggleKjøpt} variant="aktiv" erEndret={endringer.has(item.id)} />
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
+      {/* ── Seksjon 1: Fra ukesplan ── */}
+      <div className="mb-6">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3 px-1">
+          Fra ukesplan
+        </h2>
 
-          {/* Plukket/kjøpt */}
-          {kjøpt.length > 0 && (
-            <div className="mb-4">
-              <button
-                onClick={() => setKjøptÅpen(!kjøptÅpen)}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl
-                  bg-gray-100 hover:bg-gray-150 transition-colors text-sm"
-              >
-                <span className="font-medium text-gray-600 flex items-center gap-2">
-                  <span>✅</span>
-                  Plukket eller kjøpt
-                  <span className="bg-gray-300 text-gray-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                    {kjøpt.length}
-                  </span>
-                </span>
-                <svg
-                  className={`w-4 h-4 text-gray-500 transition-transform ${kjøptÅpen ? 'rotate-180' : ''}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {kjøptÅpen && (
-                <div className="mt-1 bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                  {kjøpt.map((item, i) => (
-                    <VareRad key={item.id} item={item} border={i > 0} onToggle={toggleKjøpt} variant="kjøpt" erEndret={endringer.has(item.id)} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Bunn */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between gap-4">
-            {totalEstimert > 0 && (
-              <p className="text-sm text-gray-500">
-                Total estimert: <span className="font-semibold text-gray-900">{formatNok(totalEstimert)}</span>
-              </p>
-            )}
+        {!listId ? (
+          <div className="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            <p className="text-3xl mb-2">🛒</p>
+            <p className="text-sm text-gray-500 font-medium mb-3">Ingen genererte varer</p>
             <button
-              onClick={åpneBeholdningModal}
-              disabled={isPending || lokalItems.every(i => i.is_bought)}
-              className="ml-auto px-4 py-2 bg-green-600 text-white text-sm font-medium
-                rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40"
+              onClick={genererHandleliste}
+              disabled={genererer}
+              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-xl
+                hover:bg-green-700 transition-colors disabled:opacity-50"
             >
-              ✅ Hele lista kjøpt
+              {genererer ? 'Genererer…' : 'Generer fra ukesplan'}
             </button>
           </div>
-        </>
+        ) : ikkeKjøptAuto.length === 0 ? (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
+            <p className="text-xl mb-1">🎉</p>
+            <p className="font-medium text-green-800 text-sm">Alle genererte varer er plukket!</p>
+          </div>
+        ) : (
+          Object.entries(grupper).map(([kategori, vareListe]) => (
+            <div key={kategori} className="mb-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2 px-1">
+                {kategori}
+              </h3>
+              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                {vareListe.map((item, i) => (
+                  <VareRad key={item.id} item={item} border={i > 0} onToggle={toggleKjøpt} variant="aktiv" erEndret={endringer.has(item.id)} />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ── Seksjon 2: Andre varer ── */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Andre varer
+          </h2>
+          <button
+            onClick={() => setVisManualModal(true)}
+            className="flex items-center gap-1 text-xs font-semibold text-green-700
+              hover:text-green-800 transition-colors"
+          >
+            <span className="text-base leading-none">+</span> Legg til
+          </button>
+        </div>
+
+        {ikkeKjøptManuell.length === 0 ? (
+          <div className="py-6 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            <p className="text-sm text-gray-400">Ingen manuelle varer — trykk «+ Legg til» for å legge til</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            {ikkeKjøptManuell.map((item, i) => (
+              <VareRad key={item.id} item={item} border={i > 0} onToggle={toggleKjøpt} variant="aktiv" erEndret={endringer.has(item.id)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Plukket/kjøpt */}
+      {kjøpt.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setKjøptÅpen(!kjøptÅpen)}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl
+              bg-gray-100 hover:bg-gray-150 transition-colors text-sm"
+          >
+            <span className="font-medium text-gray-600 flex items-center gap-2">
+              <span>✅</span>
+              Plukket eller kjøpt
+              <span className="bg-gray-300 text-gray-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                {kjøpt.length}
+              </span>
+            </span>
+            <svg
+              className={`w-4 h-4 text-gray-500 transition-transform ${kjøptÅpen ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {kjøptÅpen && (
+            <div className="mt-1 bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              {kjøpt.map((item, i) => (
+                <VareRad key={item.id} item={item} border={i > 0} onToggle={toggleKjøpt} variant="kjøpt" erEndret={endringer.has(item.id)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bunn — bare når liste finnes */}
+      {listId && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between gap-4">
+          {totalEstimert > 0 && (
+            <p className="text-sm text-gray-500">
+              Total estimert: <span className="font-semibold text-gray-900">{formatNok(totalEstimert)}</span>
+            </p>
+          )}
+          <button
+            onClick={åpneBeholdningModal}
+            disabled={isPending || lokalItems.every(i => i.is_bought)}
+            className="ml-auto px-4 py-2 bg-green-600 text-white text-sm font-medium
+              rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40"
+          >
+            ✅ Hele lista kjøpt
+          </button>
+        </div>
       )}
 
       {/* ── Beholdningsmodal (post-kjøp) ── */}
