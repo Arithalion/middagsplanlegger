@@ -6,7 +6,9 @@ type RawIngredient = {
   name: string
   category: string | null
   default_unit: string
-  ingredient_prices: { id: string; price_per_unit: number; unit: string; source: string | null; updated_at: string }[]
+  // ingredient_prices har UNIQUE constraint på ingredient_id — PostgREST returnerer
+  // ett objekt (eller null), ikke en array
+  ingredient_prices: { id: string; price_per_unit: number; unit: string; source: string | null; updated_at: string } | null
 }
 
 type RawKassalLink = {
@@ -34,7 +36,7 @@ export default async function PriserPage() {
     supabase
       .from('household_settings')
       .select('prefer_organic')
-      .single(),
+      .maybeSingle(),
   ])
 
   const ingredients = (rawIngredients ?? []) as unknown as RawIngredient[]
@@ -48,7 +50,7 @@ export default async function PriserPage() {
     name: ing.name,
     category: ing.category,
     default_unit: ing.default_unit,
-    price: ing.ingredient_prices[0] ?? null,
+    price: ing.ingredient_prices ?? null,
     kassalLink: linkMap.get(ing.id) ?? null,
   }))
 
