@@ -11,16 +11,25 @@ export default function RegistrerPage() {
   const [husstandNavn, setHusstandNavn] = useState('')
   const [epost, setEpost] = useState('')
   const [passord, setPassord] = useState('')
+  const [bekreftPassord, setBekreftPassord] = useState('')
   const [invitKode, setInvitKode] = useState('')
   const [mode, setMode] = useState<'ny' | 'bli-med'>('ny')
   const [feil, setFeil] = useState('')
   const [laster, setLaster] = useState(false)
 
+  const passordMatcher = passord === bekreftPassord
+  const bekreftFeil = bekreftPassord.length > 0 && !passordMatcher
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setFeil('')
-    setLaster(true)
 
+    if (!passordMatcher) {
+      setFeil('Passordene stemmer ikke overens.')
+      return
+    }
+
+    setLaster(true)
     const supabase = createClient()
 
     const { data, error } = await supabase.auth.signUp({
@@ -58,9 +67,7 @@ export default function RegistrerPage() {
             type="button"
             onClick={() => setMode(m)}
             className={`flex-1 py-2 text-sm rounded-md font-medium transition-colors ${
-              mode === m
-                ? 'bg-green-600 text-white'
-                : 'text-gray-600 hover:text-gray-900'
+              mode === m ? 'bg-green-600 text-white' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             {m === 'ny' ? 'Ny husstand' : 'Bli med i husstand'}
@@ -76,9 +83,9 @@ export default function RegistrerPage() {
             required
             value={navn}
             onChange={(e) => setNavn(e.target.value)}
+            placeholder="Ola Nordmann"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
               focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            placeholder="Ola Nordmann"
           />
         </div>
 
@@ -90,9 +97,9 @@ export default function RegistrerPage() {
               required
               value={husstandNavn}
               onChange={(e) => setHusstandNavn(e.target.value)}
+              placeholder="Familie Nordmann"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
                 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              placeholder="Familie Nordmann"
             />
           </div>
         ) : (
@@ -103,9 +110,9 @@ export default function RegistrerPage() {
               required
               value={invitKode}
               onChange={(e) => setInvitKode(e.target.value)}
+              placeholder="Kode fra husstandsadmin"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
                 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              placeholder="Kode fra husstandsadmin"
             />
           </div>
         )}
@@ -117,9 +124,9 @@ export default function RegistrerPage() {
             required
             value={epost}
             onChange={(e) => setEpost(e.target.value)}
+            placeholder="din@epost.no"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
               focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            placeholder="din@epost.no"
           />
         </div>
 
@@ -131,10 +138,36 @@ export default function RegistrerPage() {
             minLength={8}
             value={passord}
             onChange={(e) => setPassord(e.target.value)}
+            placeholder="Minst 8 tegn"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
               focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            placeholder="Minst 8 tegn"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Bekreft passord</label>
+          <input
+            type="password"
+            required
+            minLength={8}
+            value={bekreftPassord}
+            onChange={(e) => setBekreftPassord(e.target.value)}
+            placeholder="Gjenta passordet"
+            className={`w-full rounded-lg border px-3 py-2 text-sm
+              focus:outline-none focus:ring-2 focus:border-transparent ${
+                bekreftFeil
+                  ? 'border-red-400 focus:ring-red-400'
+                  : bekreftPassord.length > 0 && passordMatcher
+                  ? 'border-green-400 focus:ring-green-500'
+                  : 'border-gray-300 focus:ring-green-500'
+              }`}
+          />
+          {bekreftFeil && (
+            <p className="mt-1 text-xs text-red-600">Passordene stemmer ikke overens</p>
+          )}
+          {bekreftPassord.length > 0 && passordMatcher && (
+            <p className="mt-1 text-xs text-green-600">✓ Passordene matcher</p>
+          )}
         </div>
 
         {feil && (
@@ -145,7 +178,7 @@ export default function RegistrerPage() {
 
         <button
           type="submit"
-          disabled={laster}
+          disabled={laster || bekreftFeil || bekreftPassord.length === 0}
           className="w-full rounded-lg bg-green-600 text-white font-medium py-2.5 text-sm
             hover:bg-green-700 active:bg-green-800 transition-colors
             disabled:opacity-50 disabled:cursor-not-allowed"
