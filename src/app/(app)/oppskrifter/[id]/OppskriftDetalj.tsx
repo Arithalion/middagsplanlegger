@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { deleteRecipe } from '@/lib/actions/recipes'
 import KategoriBadge from '@/components/ui/KategoriBadge'
 import StjerneRating from '@/components/ui/StjerneRating'
@@ -46,10 +47,17 @@ export default function OppskriftDetalj({ recipe, ingredients, ratings, avgRatin
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center justify-between gap-3 mb-6">
         <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700 text-sm">
           ← Tilbake
         </button>
+        <Link
+          href={`/oppskrifter/${recipe.id}/rediger`}
+          className="px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50
+            border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+        >
+          ✏️ Rediger
+        </Link>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-4">

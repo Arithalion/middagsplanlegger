@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import type { RecipeCategory, Unit } from '@/types/database'
 
-export interface NyOppskriftData {
+export interface OppskriftData {
   name: string
   description: string
   category: RecipeCategory
@@ -20,7 +20,10 @@ export interface NyOppskriftData {
   }[]
 }
 
-export async function createRecipe(data: NyOppskriftData) {
+// Beholdt for bakoverkompatibilitet
+export type NyOppskriftData = OppskriftData
+
+export async function createRecipe(data: OppskriftData) {
   const supabase = await createClient()
 
   const { data: householdId, error: hErr } = await supabase.rpc('my_household_id')
@@ -42,7 +45,53 @@ export async function createRecipe(data: NyOppskriftData) {
 
   if (rErr || !recipe) throw new Error('Kunne ikke opprette oppskrift')
 
-  for (const ing of data.ingredients) {
+  await lagreIngredienser(supabase, householdId, recipe.id, data.ingredients)
+
+  revalidatePath('/oppskrifter')
+  redirect(`/oppskrifter/${recipe.id}`)
+}
+
+export async function updateRecipe(id: string, data: OppskriftData) {
+  const supabase = await createClient()
+
+  const { data: householdId, error: hErr } = await supabase.rpc('my_household_id')
+  if (hErr || !householdId) throw new Error('Fant ikke husstand')
+
+  const { error: rErr } = await supabase
+    .from('recipes')
+    .update({
+      name: data.name,
+      description: data.description || null,
+      category: data.category,
+      servings: data.servings,
+      prep_time_minutes: data.prep_time_minutes || null,
+      source_url: data.source_url || null,
+    })
+    .eq('id', id)
+
+  if (rErr) throw new Error('Kunne ikke oppdatere oppskrift')
+
+  // Erstatt alle ingredienser
+  await supabase.from('recipe_ingredients').delete().eq('recipe_id', id)
+  await lagreIngredienser(supabase, householdId, id, data.ingredients)
+
+  revalidatePath('/oppskrifter')
+  revalidatePath(`/oppskrifter/${id}`)
+  redirect(`/oppskrifter/${id}`)
+}
+
+export async function deleteRecipe(id: string) {
+  const supabase = await createClient()
+  await supabase.from('recipes').delete().eq('id', id)
+  revalidatePath('/oppskrifter')
+  redirect('/oppskrifter')
+}
+
+// ─── Hjelpefunksjon ───────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function lagreIngredienser(supabase: any, householdId: string, recipeId: string, ingredients: OppskriftData['ingredients']) {
+  for (const ing of ingredients) {
     if (!ing.ingredient_name.trim()) continue
 
     const { data: ingredient } = await supabase
@@ -56,7 +105,7 @@ export async function createRecipe(data: NyOppskriftData) {
 
     if (ingredient) {
       await supabase.from('recipe_ingredients').insert({
-        recipe_id: recipe.id,
+        recipe_id: recipeId,
         ingredient_id: ingredient.id,
         amount: ing.amount,
         unit: ing.unit,
@@ -64,14 +113,4 @@ export async function createRecipe(data: NyOppskriftData) {
       })
     }
   }
-
-  revalidatePath('/oppskrifter')
-  redirect(`/oppskrifter/${recipe.id}`)
-}
-
-export async function deleteRecipe(id: string) {
-  const supabase = await createClient()
-  await supabase.from('recipes').delete().eq('id', id)
-  revalidatePath('/oppskrifter')
-  redirect('/oppskrifter')
 }
