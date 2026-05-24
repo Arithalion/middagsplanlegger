@@ -22,7 +22,6 @@ type DeltOppskrift = {
   id: string
   name: string
   category: string
-  husstand: string
   opprettet: string
 }
 
@@ -150,7 +149,7 @@ export default function AdminKlient({
                         {o.name}
                       </Link>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {o.husstand} · {new Date(o.opprettet).toLocaleDateString('nb-NO')}
+                        {new Date(o.opprettet).toLocaleDateString('nb-NO')}
                       </p>
                     </div>
                     <button

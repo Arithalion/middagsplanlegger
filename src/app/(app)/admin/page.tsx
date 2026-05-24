@@ -22,7 +22,6 @@ type RawDeltOppskrift = {
   name: string
   category: string
   created_at: string
-  household: { name: string } | null
 }
 
 export default async function AdminPage() {
@@ -55,12 +54,12 @@ export default async function AdminPage() {
       .select(`
         id, reason, reported_at,
         recipe:recipes(id, name, is_public),
-        reported_by_household:households!left(name)
+        reported_by_household:households(name)
       `)
       .order('reported_at', { ascending: false }),
     supabase
       .from('recipes')
-      .select('id, name, category, created_at, household:households!left(name)')
+      .select('id, name, category, created_at')
       .eq('is_public', true)
       .order('created_at', { ascending: false }),
   ])
@@ -92,7 +91,6 @@ export default async function AdminPage() {
     id: r.id,
     name: r.name,
     category: r.category,
-    husstand: r.household?.name ?? 'Ukjent',
     opprettet: r.created_at,
   }))
 
