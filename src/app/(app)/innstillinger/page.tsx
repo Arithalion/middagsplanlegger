@@ -7,14 +7,14 @@ export default async function InnstillingerPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const [{ data: household }, { data: settings }, { data: members }] = await Promise.all([
-    supabase.from('households').select('id, name').maybeSingle(),
+    supabase.from('households').select('id, name, invite_code').maybeSingle(),
     supabase.from('household_settings').select('*').maybeSingle(),
     supabase.from('household_members').select('id, name, role, birth_year, gender').order('role').order('name'),
   ])
 
   return (
     <InnstillingerKlient
-      household={household as { id: string; name: string } | null}
+      household={household as { id: string; name: string; invite_code: string | null } | null}
       settings={settings as {
         id: string
         fish_days_per_week: number

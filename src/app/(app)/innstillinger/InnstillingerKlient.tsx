@@ -12,7 +12,7 @@ const ALLE_UKEDAGER: Weekday[] = ['mandag','tirsdag','onsdag','torsdag','fredag'
 type Tab = 'husholdning' | 'kosthold' | 'medlemmer' | 'konto'
 
 interface Props {
-  household: { id: string; name: string } | null
+  household: { id: string; name: string; invite_code: string | null } | null
   settings: {
     id: string
     fish_days_per_week: number
@@ -144,6 +144,9 @@ export default function InnstillingerKlient({ household, settings, members, user
                 focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
+
+          {/* Invitasjonskode */}
+          <InvitasjonskodeBoks kode={household?.invite_code ?? null} />
 
           <div className="bg-white rounded-2xl border border-gray-200 p-5">
             <h3 className="font-semibold text-gray-900 mb-4">Handledager</h3>
@@ -594,6 +597,52 @@ function KontoTab({
           </button>
         </form>
       </div>
+    </div>
+  )
+}
+
+// ─── Invitasjonskode-boks ─────────────────────────────────────
+
+function InvitasjonskodeBoks({ kode }: { kode: string | null }) {
+  const [kopiert, setKopiert] = useState(false)
+
+  async function kopier() {
+    if (!kode) return
+    await navigator.clipboard.writeText(kode)
+    setKopiert(true)
+    setTimeout(() => setKopiert(false), 2000)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+      <h3 className="font-semibold text-gray-900 mb-1">Invitasjonskode</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Del denne koden med den andre voksne i husstanden. De bruker den under «Bli med i husstand» ved registrering.
+      </p>
+
+      {kode ? (
+        <div className="flex items-center gap-3">
+          <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+            <span className="font-mono text-xl font-bold tracking-[0.25em] text-gray-900 select-all">
+              {kode}
+            </span>
+          </div>
+          <button
+            onClick={kopier}
+            className={`shrink-0 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+              kopiert
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {kopiert ? '✓ Kopiert!' : 'Kopier'}
+          </button>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400 italic">
+          Koden genereres automatisk ved opprettelse av husstand. Kjør migrasjon 005 i Supabase for å aktivere dette.
+        </p>
+      )}
     </div>
   )
 }

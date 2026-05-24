@@ -32,6 +32,16 @@ export default function RegistrerPage() {
     setLaster(true)
     const supabase = createClient()
 
+    // Valider invitasjonskode før registrering
+    if (mode === 'bli-med') {
+      const { data: gyldig } = await supabase.rpc('validate_invite_code', { code: invitKode })
+      if (!gyldig) {
+        setFeil('Invitasjonskoden er ugyldig. Sjekk koden og prøv igjen.')
+        setLaster(false)
+        return
+      }
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: epost,
       password: passord,
