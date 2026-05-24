@@ -51,6 +51,8 @@ export default function OppskriftDetalj({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
+  const [porsjoner, setPorsjoner] = useState(recipe.servings)
+
   const [minRating, setMinRating] = useState<number>(
     ratings.find((r) => r.member?.id === currentMemberId)?.score ?? 0
   )
@@ -156,7 +158,32 @@ export default function OppskriftDetalj({
         )}
         <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
           {recipe.prep_time_minutes && <span>⏱ {recipe.prep_time_minutes} min</span>}
-          <span>👥 {recipe.servings} porsjoner</span>
+          {/* Porsjonsvelger */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPorsjoner(p => Math.max(1, p - 1))}
+              className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100
+                hover:bg-gray-200 text-gray-700 font-bold text-sm leading-none transition-colors"
+              aria-label="Færre porsjoner"
+            >−</button>
+            <span className={`text-sm px-1 ${porsjoner !== recipe.servings ? 'text-blue-600 font-semibold' : ''}`}>
+              👥 {porsjoner} pors.
+            </span>
+            <button
+              onClick={() => setPorsjoner(p => p + 1)}
+              className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100
+                hover:bg-gray-200 text-gray-700 font-bold text-sm leading-none transition-colors"
+              aria-label="Flere porsjoner"
+            >+</button>
+            {porsjoner !== recipe.servings && (
+              <button
+                onClick={() => setPorsjoner(recipe.servings)}
+                className="text-xs text-gray-400 hover:text-gray-600 ml-0.5"
+                aria-label="Tilbakestill porsjoner"
+                title={`Tilbakestill til ${recipe.servings}`}
+              >↺</button>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <StjerneRating score={avgRating} size="sm" />
             {ratings.length > 0 && <span className="text-xs">({ratings.length})</span>}
@@ -239,7 +266,11 @@ export default function OppskriftDetalj({
             {ingredients.map((ing) => (
               <li key={ing.id} className="flex items-baseline gap-2 text-sm">
                 <span className="text-gray-900 font-medium min-w-0">{ing.ingredient.name}</span>
-                <span className="text-gray-500 shrink-0">{ing.amount} {ing.unit}</span>
+                <span className="text-gray-500 shrink-0">
+                  {porsjoner !== recipe.servings
+                    ? Math.round((ing.amount * porsjoner / recipe.servings) * 10) / 10
+                    : ing.amount} {ing.unit}
+                </span>
                 {ing.note && <span className="text-gray-400 italic">({ing.note})</span>}
               </li>
             ))}

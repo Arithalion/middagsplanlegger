@@ -11,6 +11,7 @@ export async function setMealPlan(params: {
   recipe_id: string | null
   is_special_day?: boolean
   note?: string
+  servings?: number | null
 }) {
   const supabase = await createClient()
 
@@ -26,6 +27,7 @@ export async function setMealPlan(params: {
       recipe_id: params.recipe_id,
       is_special_day: params.is_special_day ?? false,
       note: params.note ?? null,
+      servings: params.servings ?? null,
     },
     { onConflict: 'household_id,week_number,year,weekday' }
   )
@@ -36,5 +38,11 @@ export async function setMealPlan(params: {
 export async function removeMealPlan(id: string) {
   const supabase = await createClient()
   await supabase.from('meal_plans').delete().eq('id', id)
+  revalidatePath('/planlegger')
+}
+
+export async function updateMealPlanServings(id: string, servings: number | null) {
+  const supabase = await createClient()
+  await supabase.from('meal_plans').update({ servings }).eq('id', id)
   revalidatePath('/planlegger')
 }

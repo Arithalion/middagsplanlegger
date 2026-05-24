@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { UKEDAGER, KATEGORI_FARGER, KATEGORI_LABELS, formatDatoKort } from '@/lib/utils'
 import KategoriBadge from '@/components/ui/KategoriBadge'
 import type { RecipeCategory, Weekday } from '@/types/database'
-import { setMealPlan, removeMealPlan } from '@/lib/actions/meal-plans'
+import { setMealPlan, removeMealPlan, updateMealPlanServings } from '@/lib/actions/meal-plans'
 
 type Oppskrift = { id: string; name: string; category: RecipeCategory; avg_rating: number | null }
 type DagPlan = {
@@ -13,7 +13,8 @@ type DagPlan = {
   weekday: Weekday
   is_special_day: boolean
   note: string | null
-  recipe: { id: string; name: string; category: RecipeCategory } | null
+  servings: number | null
+  recipe: { id: string; name: string; category: RecipeCategory; servings: number } | null
 }
 
 interface Props {
@@ -29,6 +30,7 @@ interface Props {
   thisWeekDates: string[]
   nextWeekDates: string[]
   today: string
+  defaultServings: number
 }
 
 const HELGEKATEGORIER: RecipeCategory[] = ['helgemat', 'søndagsmiddag', 'selskapsmat']
@@ -39,6 +41,7 @@ export default function PlanleggerKlient({
   thisPlanMap, nextPlanMap,
   oppskrifter, defaultSpecialDays, fishDaysPerWeek,
   thisWeekDates, nextWeekDates, today,
+  defaultServings,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -46,7 +49,6 @@ export default function PlanleggerKlient({
   const [autoForeslar, setAutoForeslar] = useState(false)
   const [melding, setMelding] = useState('')
 
-  // Kombinert planMap for enkel oppdatering
   const [planMaps, setPlanMaps] = useState<Record<string, Record<string, DagPlan>>>({
     [`${thisYear}-${thisWeek}`]: thisPlanMap,
     [`${nextYear}-${nextWeek}`]: nextPlanMap,
@@ -61,7 +63,6 @@ export default function PlanleggerKlient({
     const { dag, week, year } = valgt
     const isSpecial = defaultSpecialDays.includes(dag)
 
-    // Optimistisk oppdatering
     const recipe = oppskrifter.find(r => r.id === recipeId)
     if (recipe) {
       setPlanMaps(prev => ({
@@ -73,14 +74,18 @@ export default function PlanleggerKlient({
             weekday: dag,
             is_special_day: isSpecial,
             note: null,
-            recipe: { id: recipe.id, name: recipe.name, category: recipe.category },
+            servings: defaultServings,
+            recipe: { id: recipe.id, name: recipe.name, category: recipe.category, servings: defaultServings },
           },
         },
       }))
     }
 
     setValgt(null)
-    await setMealPlan({ weekday: dag, recipe_id: recipeId, week_number: week, year, is_special_day: isSpecial })
+    await setMealPlan({
+      weekday: dag, recipe_id: recipeId, week_number: week, year,
+      is_special_day: isSpecial, servings: defaultServings,
+    })
     startTransition(() => router.refresh())
   }
 
@@ -92,6 +97,32 @@ export default function PlanleggerKlient({
     })
     await removeMealPlan(dagId)
     startTransition(() => router.refresh())
+  }
+
+  async function justerPorsjoner(
+    planId: string,
+    dag: Weekday,
+    week: number,
+    year: number,
+    delta: number,
+    currentServings: number | null,
+    recipeServings: number
+  ) {
+    const effective = currentServings ?? defaultServings
+    const newServings = Math.max(1, effective + delta)
+
+    setPlanMaps(prev => ({
+      ...prev,
+      [`${year}-${week}`]: {
+        ...prev[`${year}-${week}`],
+        [dag]: {
+          ...prev[`${year}-${week}`][dag],
+          servings: newServings,
+        },
+      },
+    }))
+
+    await updateMealPlanServings(planId, newServings)
   }
 
   async function autoForslag() {
@@ -107,6 +138,7 @@ export default function PlanleggerKlient({
             weekday: dag as Weekday, recipe_id: recipeId as string,
             week_number: thisWeek, year: thisYear,
             is_special_day: defaultSpecialDays.includes(dag as Weekday),
+            servings: defaultServings,
           })
         }
       }
@@ -162,8 +194,12 @@ export default function PlanleggerKlient({
         defaultSpecialDays={defaultSpecialDays}
         fishCount={fishCount(thisWeek, thisYear)}
         fishDaysPerWeek={fishDaysPerWeek}
+        defaultServings={defaultServings}
         onVelg={(dag) => setValgt({ dag, week: thisWeek, year: thisYear })}
         onFjern={(id, dag) => fjernOppskrift(id, dag, thisWeek, thisYear)}
+        onJusterPorsjoner={(planId, dag, delta, current, recipeServings) =>
+          justerPorsjoner(planId, dag, thisWeek, thisYear, delta, current, recipeServings)
+        }
       />
 
       {/* Neste uke */}
@@ -177,8 +213,12 @@ export default function PlanleggerKlient({
         defaultSpecialDays={defaultSpecialDays}
         fishCount={fishCount(nextWeek, nextYear)}
         fishDaysPerWeek={fishDaysPerWeek}
+        defaultServings={defaultServings}
         onVelg={(dag) => setValgt({ dag, week: nextWeek, year: nextYear })}
         onFjern={(id, dag) => fjernOppskrift(id, dag, nextWeek, nextYear)}
+        onJusterPorsjoner={(planId, dag, delta, current, recipeServings) =>
+          justerPorsjoner(planId, dag, nextWeek, nextYear, delta, current, recipeServings)
+        }
       />
 
       {/* Modal — bottom sheet på mobil */}
@@ -235,7 +275,8 @@ export default function PlanleggerKlient({
 
 function UkeSeksjon({
   tittel, week, year, planMap, datoer, todayDate,
-  defaultSpecialDays, fishCount, fishDaysPerWeek, onVelg, onFjern,
+  defaultSpecialDays, fishCount, fishDaysPerWeek,
+  defaultServings, onVelg, onFjern, onJusterPorsjoner,
 }: {
   tittel: string
   week: number
@@ -246,8 +287,10 @@ function UkeSeksjon({
   defaultSpecialDays: Weekday[]
   fishCount: number
   fishDaysPerWeek: number
+  defaultServings: number
   onVelg: (dag: Weekday) => void
   onFjern: (id: string, dag: Weekday) => void
+  onJusterPorsjoner: (planId: string, dag: Weekday, delta: number, current: number | null, recipeServings: number) => void
 }) {
   return (
     <div className="mb-6">
@@ -265,11 +308,13 @@ function UkeSeksjon({
           const dato = new Date(datoer[i])
           const erIDag = dato.toDateString() === todayDate.toDateString()
           const isSpecial = defaultSpecialDays.includes(dag)
+          const effectiveServings = plan?.servings ?? defaultServings
+          const isNonStandard = plan?.recipe != null && effectiveServings !== plan.recipe.servings
 
           return (
             <div
               key={dag}
-              className={`flex items-center gap-3 px-4 py-3.5 ${i > 0 ? 'border-t border-gray-100' : ''}
+              className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-gray-100' : ''}
                 ${erIDag ? 'bg-green-50' : isSpecial ? 'bg-amber-50/50' : ''}`}
             >
               {/* Dato */}
@@ -280,18 +325,42 @@ function UkeSeksjon({
                 <p className="text-xs text-gray-400">{formatDatoKort(dato)}</p>
               </div>
 
-              {/* Middag */}
+              {/* Middag + porsjoner */}
               <div className="flex-1 min-w-0">
                 {plan?.recipe ? (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {plan.recipe.name}
-                    </span>
-                    <KategoriBadge category={plan.recipe.category} className="hidden sm:inline-flex" />
-                    {plan.recipe.category === 'fisk' && <span className="text-sm">🐟</span>}
-                    {plan.recipe.category === 'vegetar' && <span className="text-sm">🥦</span>}
-                    {isSpecial && <span className="text-sm">⭐</span>}
-                  </div>
+                  <>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {plan.recipe.name}
+                      </span>
+                      <KategoriBadge category={plan.recipe.category} className="hidden sm:inline-flex" />
+                      {plan.recipe.category === 'fisk' && <span className="text-sm">🐟</span>}
+                      {plan.recipe.category === 'vegetar' && <span className="text-sm">🥦</span>}
+                      {isSpecial && <span className="text-sm">⭐</span>}
+                    </div>
+                    {/* Porsjonsvelger */}
+                    {plan.id && (
+                      <div className="flex items-center gap-0.5 mt-1">
+                        <button
+                          onClick={() => onJusterPorsjoner(plan.id, dag, -1, plan.servings, plan.recipe!.servings)}
+                          className="w-5 h-5 flex items-center justify-center rounded-full
+                            bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
+                            leading-none transition-colors"
+                          aria-label="Færre porsjoner"
+                        >−</button>
+                        <span className={`text-xs px-1 tabular-nums ${isNonStandard ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
+                          👥 {effectiveServings}
+                        </span>
+                        <button
+                          onClick={() => onJusterPorsjoner(plan.id, dag, +1, plan.servings, plan.recipe!.servings)}
+                          className="w-5 h-5 flex items-center justify-center rounded-full
+                            bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
+                            leading-none transition-colors"
+                          aria-label="Flere porsjoner"
+                        >+</button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <span className="text-sm text-gray-400 italic">Ikke planlagt</span>
                 )}
