@@ -6,7 +6,13 @@ import { formatMengde } from '@/lib/utils'
 import { addPantryItem, deletePantryItem } from '@/lib/actions/pantry'
 import type { Unit } from '@/types/database'
 
-const ENHETER: Unit[] = ['g', 'kg', 'ml', 'dl', 'l', 'stk', 'boks', 'pose', 'flaske', 'pk']
+const ENHETER: Unit[] = ['g', 'kg', 'ml', 'dl', 'l', 'tsk', 'ss', 'stk', 'boks', 'pose', 'flaske', 'pk']
+
+const ENHET_GRUPPER = [
+  { label: 'Vekt',   enheter: ['g', 'kg'] as Unit[] },
+  { label: 'Volum',  enheter: ['ml', 'dl', 'l', 'tsk', 'ss'] as Unit[] },
+  { label: 'Antall', enheter: ['stk', 'boks', 'pose', 'flaske', 'pk'] as Unit[] },
+]
 
 type Item = {
   id: string
@@ -132,7 +138,11 @@ export default function BeholdningKlient({ items, ingredients }: Props) {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
                   focus:outline-none focus:ring-2 focus:ring-green-500"
               >
-                {ENHETER.map((u) => <option key={u} value={u}>{u}</option>)}
+                {ENHET_GRUPPER.map(({ label, enheter }) => (
+                  <optgroup key={label} label={label}>
+                    {enheter.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div className="col-span-2">

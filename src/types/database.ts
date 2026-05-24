@@ -1,4 +1,4 @@
-export type Unit = 'g' | 'kg' | 'ml' | 'dl' | 'l' | 'stk' | 'boks' | 'pose' | 'flaske' | 'pk'
+export type Unit = 'g' | 'kg' | 'ml' | 'dl' | 'l' | 'tsk' | 'ss' | 'stk' | 'boks' | 'pose' | 'flaske' | 'pk'
 
 export type RecipeCategory =
   | 'hverdagsmat'

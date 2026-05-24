@@ -15,7 +15,13 @@ const KATEGORIER: { value: RecipeCategory; label: string }[] = [
   { value: 'selskapsmat', label: 'Selskapsmat' },
 ]
 
-const ENHETER: Unit[] = ['g', 'kg', 'ml', 'dl', 'l', 'stk', 'boks', 'pose', 'flaske', 'pk']
+const ENHETER: Unit[] = ['g', 'kg', 'ml', 'dl', 'l', 'tsk', 'ss', 'stk', 'boks', 'pose', 'flaske', 'pk']
+
+const ENHET_GRUPPER = [
+  { label: 'Vekt',   enheter: ['g', 'kg'] as Unit[] },
+  { label: 'Volum',  enheter: ['ml', 'dl', 'l', 'tsk', 'ss'] as Unit[] },
+  { label: 'Antall', enheter: ['stk', 'boks', 'pose', 'flaske', 'pk'] as Unit[] },
+]
 
 type Ingredienslinje = { ingredientNavn: string; amount: string; unit: Unit; note: string }
 const BLANK_LINJE: Ingredienslinje = { ingredientNavn: '', amount: '', unit: 'stk', note: '' }
@@ -225,7 +231,11 @@ export default function NyOppskriftPage() {
                   className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                 <select value={linje.unit} onChange={(e) => oppdaterIngrediens(i, 'unit', e.target.value)}
                   className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                  {ENHETER.map((u) => <option key={u} value={u}>{u}</option>)}
+                  {ENHET_GRUPPER.map(({ label, enheter }) => (
+                    <optgroup key={label} label={label}>
+                      {enheter.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
                 {ingredienser.length > 1 && (
                   <button type="button" onClick={() => fjernIngrediens(i)}
