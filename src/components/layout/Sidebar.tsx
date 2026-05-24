@@ -7,9 +7,11 @@ import { loggUt } from '@/lib/actions/auth'
 const nav = [
   { href: '/dashboard',    label: 'Oversikt',       icon: '🏠' },
   { href: '/planlegger',   label: 'Ukesplan',        icon: '📅' },
+  { href: '/matpakker',    label: 'Matpakker',       icon: '🍞' },
   { href: '/oppskrifter',  label: 'Oppskrifter',     icon: '📖' },
   { href: '/handleliste',  label: 'Handleliste',     icon: '🛒' },
   { href: '/beholdning',   label: 'Beholdning',      icon: '📦' },
+  { href: '/priser',       label: 'Priser',          icon: '💲' },
   { href: '/budsjett',     label: 'Budsjett',        icon: '💰' },
   { href: '/innstillinger',label: 'Innstillinger',   icon: '⚙️'  },
 ]

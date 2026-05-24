@@ -36,8 +36,10 @@ export async function middleware(request: NextRequest) {
     '/dashboard',
     '/oppskrifter',
     '/planlegger',
+    '/matpakker',
     '/handleliste',
     '/beholdning',
+    '/priser',
     '/budsjett',
     '/innstillinger',
   ]

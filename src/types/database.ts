@@ -17,14 +17,14 @@ export type MemberRole = 'voksen' | 'barn'
 
 // ─── Households ────────────────────────────────────────────────────────────
 
-export interface Household {
+export type Household = {
   id: string
   name: string
   created_at: string
   updated_at: string
 }
 
-export interface HouseholdMember {
+export type HouseholdMember = {
   id: string
   household_id: string
   name: string
@@ -34,7 +34,7 @@ export interface HouseholdMember {
   created_at: string
 }
 
-export interface HouseholdSettings {
+export type HouseholdSettings = {
   id: string
   household_id: string
   weekly_budget: number | null
@@ -48,7 +48,7 @@ export interface HouseholdSettings {
 
 // ─── Ingredients ───────────────────────────────────────────────────────────
 
-export interface Ingredient {
+export type Ingredient = {
   id: string
   household_id: string
   name: string
@@ -57,7 +57,7 @@ export interface Ingredient {
   created_at: string
 }
 
-export interface IngredientPrice {
+export type IngredientPrice = {
   id: string
   ingredient_id: string
   price_per_unit: number
@@ -68,7 +68,7 @@ export interface IngredientPrice {
 
 // ─── Recipes ───────────────────────────────────────────────────────────────
 
-export interface Recipe {
+export type Recipe = {
   id: string
   household_id: string
   name: string
@@ -83,7 +83,7 @@ export interface Recipe {
   updated_at: string
 }
 
-export interface RecipeIngredient {
+export type RecipeIngredient = {
   id: string
   recipe_id: string
   ingredient_id: string
@@ -92,7 +92,7 @@ export interface RecipeIngredient {
   note: string | null
 }
 
-export interface RecipeRating {
+export type RecipeRating = {
   id: string
   recipe_id: string
   member_id: string
@@ -102,7 +102,7 @@ export interface RecipeRating {
 
 // ─── Meal plans ────────────────────────────────────────────────────────────
 
-export interface MealPlan {
+export type MealPlan = {
   id: string
   household_id: string
   week_number: number
@@ -117,7 +117,7 @@ export interface MealPlan {
 
 // ─── Lunchbox plans ────────────────────────────────────────────────────────
 
-export interface LunchboxPlan {
+export type LunchboxPlan = {
   id: string
   household_id: string
   member_id: string
@@ -130,7 +130,7 @@ export interface LunchboxPlan {
 
 // ─── Pantry ────────────────────────────────────────────────────────────────
 
-export interface PantryItem {
+export type PantryItem = {
   id: string
   household_id: string
   ingredient_id: string
@@ -142,7 +142,7 @@ export interface PantryItem {
 
 // ─── Shopping lists ────────────────────────────────────────────────────────
 
-export interface ShoppingList {
+export type ShoppingList = {
   id: string
   household_id: string
   list_date: string
@@ -154,7 +154,7 @@ export interface ShoppingList {
   updated_at: string
 }
 
-export interface ShoppingListItem {
+export type ShoppingListItem = {
   id: string
   list_id: string
   ingredient_id: string
@@ -167,7 +167,7 @@ export interface ShoppingListItem {
 
 // ─── Budgets ───────────────────────────────────────────────────────────────
 
-export interface Budget {
+export type Budget = {
   id: string
   household_id: string
   week_number: number
@@ -180,27 +180,27 @@ export interface Budget {
 
 // ─── Extended (with joins) ─────────────────────────────────────────────────
 
-export interface RecipeWithIngredients extends Recipe {
+export type RecipeWithIngredients = Recipe & {
   recipe_ingredients: (RecipeIngredient & { ingredient: Ingredient })[]
   avg_rating: number | null
   rating_count: number
 }
 
-export interface ShoppingListWithItems extends ShoppingList {
+export type ShoppingListWithItems = ShoppingList & {
   items: (ShoppingListItem & { ingredient: Ingredient & { price?: IngredientPrice } })[]
 }
 
-export interface MealPlanWithRecipe extends MealPlan {
+export type MealPlanWithRecipe = MealPlan & {
   recipe: RecipeWithIngredients | null
 }
 
-export interface PantryItemWithIngredient extends PantryItem {
+export type PantryItemWithIngredient = PantryItem & {
   ingredient: Ingredient & { price?: IngredientPrice }
 }
 
 // ─── Database type ─────────────────────────────────────────────────────────
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       households: {
@@ -291,7 +291,7 @@ export interface Database {
     Views: Record<string, never>
     Functions: {
       my_household_id: {
-        Args: Record<string, never>
+        Args: Record<PropertyKey, never>
         Returns: string
       }
     }
