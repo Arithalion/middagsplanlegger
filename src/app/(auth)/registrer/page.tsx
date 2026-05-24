@@ -56,9 +56,13 @@ export default function RegistrerPage() {
       return
     }
 
-    if (data.user) {
+    if (data.session) {
+      // E-postverifisering er avslått — brukeren er allerede innlogget
       router.push('/dashboard')
       router.refresh()
+    } else if (data.user) {
+      // Standard: brukeren må verifisere e-posten sin
+      router.push(`/registrering-fullfort?epost=${encodeURIComponent(epost)}`)
     }
   }
 
