@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { lookup } from 'dns/promises'
+import { isIPv4 } from 'net'
 
 interface SchemaRecipe {
   name?: string
@@ -89,6 +91,50 @@ function extractImage(image: SchemaRecipe['image']): string | null {
   return (image as { url: string }).url ?? null
 }
 
+// ─── SSRF-beskyttelse ─────────────────────────────────────────
+
+function isPrivateIP(ip: string): boolean {
+  if (!isIPv4(ip)) {
+    // IPv6 loopback og ULA
+    return ip === '::1' || ip.startsWith('fc') || ip.startsWith('fd')
+  }
+  const [a, b] = ip.split('.').map(Number)
+  return (
+    a === 127 ||
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254)   // link-local / cloud-metadata
+  )
+}
+
+async function validateUrl(rawUrl: string): Promise<{ ok: true; url: URL } | { ok: false; reason: string }> {
+  let url: URL
+  try { url = new URL(rawUrl) } catch { return { ok: false, reason: 'Ugyldig URL' } }
+
+  if (url.protocol !== 'https:') {
+    return { ok: false, reason: 'Kun HTTPS-URLer er støttet' }
+  }
+
+  const hostname = url.hostname
+
+  // Blokker numeriske IP-adresser direkte
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === '::1') {
+    if (isPrivateIP(hostname)) return { ok: false, reason: 'Tilgang nektet' }
+    return { ok: true, url }
+  }
+
+  // Løs opp hostname og sjekk den returnerte IP-en
+  try {
+    const { address } = await lookup(hostname, { family: 4 })
+    if (isPrivateIP(address)) return { ok: false, reason: 'Tilgang nektet' }
+  } catch {
+    return { ok: false, reason: 'Klarte ikke løse opp domenenavnet' }
+  }
+
+  return { ok: true, url }
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -97,9 +143,14 @@ export async function POST(request: NextRequest) {
   const { url } = await request.json()
   if (!url) return NextResponse.json({ error: 'Mangler URL' }, { status: 400 })
 
+  const validated = await validateUrl(url)
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.reason }, { status: 422 })
+  }
+
   let html: string
   try {
-    const res = await fetch(url, {
+    const res = await fetch(validated.url.toString(), {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Middagsplanleggeren/1.0)' },
       signal: AbortSignal.timeout(8000),
     })

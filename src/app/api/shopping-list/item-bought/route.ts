@@ -3,6 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Ikke innlogget' }, { status: 401 })
+
   const { itemId, isBought } = (await request.json()) as {
     itemId: string
     isBought?: boolean
