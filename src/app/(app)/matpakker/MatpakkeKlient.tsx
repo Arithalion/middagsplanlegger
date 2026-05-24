@@ -88,7 +88,7 @@ export default function MatpakkeKlient({ barn, planMap: initialPlanMap, weekNumb
 
   if (barn.length === 0) {
     return (
-      <div className="p-6 max-w-2xl mx-auto">
+      <div className="p-4 md:p-6 max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Matpakker</h1>
         <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
           <p className="text-4xl mb-3">🍞</p>
@@ -102,7 +102,7 @@ export default function MatpakkeKlient({ barn, planMap: initialPlanMap, weekNumb
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Matpakker</h1>

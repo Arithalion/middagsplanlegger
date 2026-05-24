@@ -81,7 +81,7 @@ export default async function DashboardPage() {
   const budsjettProsent = planlagt > 0 ? Math.min(100, Math.round((faktisk / planlagt) * 100)) : 0
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">God dag! 👋</h1>
         <p className="text-sm text-gray-500 mt-1">Uke {weekNumber} · {now.toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' })}</p>

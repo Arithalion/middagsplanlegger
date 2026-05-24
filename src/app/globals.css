@@ -8,8 +8,23 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
   height: 100%;
+}
+
+/* Skjul scrollbar men behold funksjonalitet */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area for iPhones med notch/dynamic island */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

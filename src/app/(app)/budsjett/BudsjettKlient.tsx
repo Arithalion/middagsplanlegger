@@ -49,7 +49,7 @@ export default function BudsjettKlient({ weekNumber, year, budgetId, plannedAmou
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-4 md:p-6 max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Budsjett</h1>
         <p className="text-sm text-gray-500 mt-1">Uke {weekNumber} · {year}</p>

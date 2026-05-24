@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import './globals.css'
 
@@ -9,6 +9,13 @@ export const metadata: Metadata = {
   description: 'Planlegg middager, handle smart og hold budsjettet',
 }
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: '#16a34a',
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -16,7 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="nb">
-      <body className={geist.className}>{children}</body>
+      <body className={`${geist.className} antialiased`}>{children}</body>
     </html>
   )
 }
