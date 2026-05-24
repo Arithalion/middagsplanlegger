@@ -11,6 +11,8 @@ type RawRecipe = {
   servings: number
   prep_time_minutes: number | null
   source_url: string | null
+  is_public: boolean
+  household_id: string
   created_at: string
   recipe_ingredients: {
     id: string
@@ -28,17 +30,24 @@ type RawRecipe = {
   }[]
 }
 
+type RawHR = { recipe_id: string } | null
+
 export default async function OppskriftDetaljPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: rawRecipe }, { data: rawUserHousehold }] = await Promise.all([
+  const [
+    { data: rawRecipe },
+    { data: rawUserHousehold },
+    { data: householdId },
+  ] = await Promise.all([
     supabase
       .from('recipes')
       .select(`
-        id, name, description, category, servings, prep_time_minutes, source_url, created_at,
+        id, name, description, category, servings, prep_time_minutes, source_url,
+        is_public, household_id, created_at,
         recipe_ingredients(
           id, amount, unit, note, sort_order,
           ingredient:ingredients(id, name)
@@ -55,6 +64,7 @@ export default async function OppskriftDetaljPage({ params }: { params: Promise<
       .select('member_id')
       .eq('user_id', user?.id ?? '')
       .maybeSingle(),
+    supabase.rpc('my_household_id'),
   ])
 
   if (!rawRecipe) notFound()
@@ -65,6 +75,19 @@ export default async function OppskriftDetaljPage({ params }: { params: Promise<
     : null
 
   const userHousehold = rawUserHousehold as { member_id: string | null } | null
+  const erEgen = recipe.household_id === householdId
+
+  // Sjekk om denne oppskriften er i husstandens samling
+  let erISamlingen = false
+  if (householdId) {
+    const { data: hr } = await supabase
+      .from('household_recipes')
+      .select('recipe_id')
+      .eq('household_id', householdId)
+      .eq('recipe_id', id)
+      .maybeSingle()
+    erISamlingen = !!(hr as RawHR)
+  }
 
   return (
     <OppskriftDetalj
@@ -76,6 +99,7 @@ export default async function OppskriftDetaljPage({ params }: { params: Promise<
         servings: recipe.servings,
         prep_time_minutes: recipe.prep_time_minutes,
         source_url: recipe.source_url,
+        is_public: recipe.is_public,
       }}
       ingredients={recipe.recipe_ingredients.map((ri) => ({
         id: ri.id,
@@ -87,6 +111,8 @@ export default async function OppskriftDetaljPage({ params }: { params: Promise<
       ratings={recipe.recipe_ratings}
       avgRating={avgRating}
       currentMemberId={userHousehold?.member_id ?? null}
+      erEgen={erEgen}
+      erISamlingen={erISamlingen}
     />
   )
 }

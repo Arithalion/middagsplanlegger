@@ -14,6 +14,8 @@ type Oppskrift = {
   servings: number
   avg_rating: number | null
   rating_count: number
+  is_public: boolean
+  er_egen: boolean
 }
 
 const KATEGORIER: { value: RecipeCategory | 'alle'; label: string }[] = [
@@ -42,16 +44,25 @@ export default function OppskrifterKlient({ oppskrifter }: { oppskrifter: Oppskr
       {/* Overskrift */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Oppskrifter</h1>
-          <p className="text-sm text-gray-500 mt-1">{oppskrifter.length} oppskrifter totalt</p>
+          <h1 className="text-2xl font-bold text-gray-900">Mine oppskrifter</h1>
+          <p className="text-sm text-gray-500 mt-1">{oppskrifter.length} oppskrifter i samlingen</p>
         </div>
-        <Link
-          href="/oppskrifter/ny"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm
-            font-medium rounded-lg hover:bg-green-700 transition-colors"
-        >
-          + Ny oppskrift
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/oppskrifter/utforsk"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 text-sm
+              font-medium rounded-lg hover:bg-blue-100 transition-colors border border-blue-200"
+          >
+            🔍 Utforsk
+          </Link>
+          <Link
+            href="/oppskrifter/ny"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm
+              font-medium rounded-lg hover:bg-green-700 transition-colors"
+          >
+            + Ny oppskrift
+          </Link>
+        </div>
       </div>
 
       {/* Søk */}
@@ -96,6 +107,14 @@ export default function OppskrifterKlient({ oppskrifter }: { oppskrifter: Oppskr
               Tøm søket
             </button>
           )}
+          {!søk && aktivKategori === 'alle' && (
+            <Link
+              href="/oppskrifter/utforsk"
+              className="mt-3 inline-block text-sm text-blue-600 hover:text-blue-700"
+            >
+              Utforsk andres oppskrifter →
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -118,6 +137,21 @@ export default function OppskrifterKlient({ oppskrifter }: { oppskrifter: Oppskr
                   <span>👥 {r.servings} pers</span>
                 </div>
                 <StjerneRating score={r.avg_rating} size="sm" />
+              </div>
+              {/* Badges */}
+              <div className="flex gap-1.5 mt-2.5">
+                {r.er_egen && r.is_public && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+                    bg-green-50 text-green-700 text-xs font-medium border border-green-200">
+                    🌍 Delt
+                  </span>
+                )}
+                {!r.er_egen && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+                    bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200">
+                    📌 Fra samlingen
+                  </span>
+                )}
               </div>
             </Link>
           ))}
