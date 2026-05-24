@@ -198,7 +198,7 @@ export interface PantryItemWithIngredient extends PantryItem {
   ingredient: Ingredient & { price?: IngredientPrice }
 }
 
-// ─── Database helper type ──────────────────────────────────────────────────
+// ─── Database type ─────────────────────────────────────────────────────────
 
 export interface Database {
   public: {
@@ -207,72 +207,95 @@ export interface Database {
         Row: Household
         Insert: Omit<Household, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Household, 'id' | 'created_at'>>
+        Relationships: []
       }
       household_members: {
         Row: HouseholdMember
         Insert: Omit<HouseholdMember, 'id' | 'created_at'>
         Update: Partial<Omit<HouseholdMember, 'id' | 'created_at'>>
+        Relationships: []
       }
       household_settings: {
         Row: HouseholdSettings
         Insert: Omit<HouseholdSettings, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<HouseholdSettings, 'id' | 'created_at'>>
+        Relationships: []
       }
       ingredients: {
         Row: Ingredient
         Insert: Omit<Ingredient, 'id' | 'created_at'>
         Update: Partial<Omit<Ingredient, 'id' | 'created_at'>>
+        Relationships: []
       }
       ingredient_prices: {
         Row: IngredientPrice
         Insert: Omit<IngredientPrice, 'id'>
         Update: Partial<Omit<IngredientPrice, 'id'>>
+        Relationships: []
       }
       recipes: {
         Row: Recipe
         Insert: Omit<Recipe, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Recipe, 'id' | 'created_at'>>
+        Relationships: []
       }
       recipe_ingredients: {
         Row: RecipeIngredient
         Insert: Omit<RecipeIngredient, 'id'>
         Update: Partial<Omit<RecipeIngredient, 'id'>>
+        Relationships: []
       }
       recipe_ratings: {
         Row: RecipeRating
         Insert: Omit<RecipeRating, 'id'>
         Update: Partial<Omit<RecipeRating, 'id'>>
+        Relationships: []
       }
       meal_plans: {
         Row: MealPlan
         Insert: Omit<MealPlan, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<MealPlan, 'id' | 'created_at'>>
+        Relationships: []
       }
       lunchbox_plans: {
         Row: LunchboxPlan
         Insert: Omit<LunchboxPlan, 'id'>
         Update: Partial<Omit<LunchboxPlan, 'id'>>
+        Relationships: []
       }
       pantry_items: {
         Row: PantryItem
         Insert: Omit<PantryItem, 'id' | 'updated_at'>
         Update: Partial<Omit<PantryItem, 'id'>>
+        Relationships: []
       }
       shopping_lists: {
         Row: ShoppingList
         Insert: Omit<ShoppingList, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<ShoppingList, 'id' | 'created_at'>>
+        Relationships: []
       }
       shopping_list_items: {
         Row: ShoppingListItem
         Insert: Omit<ShoppingListItem, 'id'>
         Update: Partial<Omit<ShoppingListItem, 'id'>>
+        Relationships: []
       }
       budgets: {
         Row: Budget
         Insert: Omit<Budget, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Budget, 'id' | 'created_at'>>
+        Relationships: []
       }
     }
+    Views: Record<string, never>
+    Functions: {
+      my_household_id: {
+        Args: Record<string, never>
+        Returns: string
+      }
+    }
+    Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }
