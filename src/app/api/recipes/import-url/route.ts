@@ -9,17 +9,77 @@ interface SchemaRecipe {
   prepTime?: string
   cookTime?: string
   recipeIngredient?: string[]
-  recipeCategory?: string | string[]
   image?: string | { url: string } | { url: string }[]
+}
+
+interface ParsedIngredient {
+  name: string
+  amount: number | null
+  unit: string | null
+}
+
+// Norske enhet-aliaser → interne enhetskoder
+const UNIT_MAP: Record<string, string> = {
+  ts: 'tsk', tsk: 'tsk', teskje: 'tsk', teskjeer: 'tsk', teskjei: 'tsk',
+  ss: 'ss', spiseskje: 'ss', spiseskjeer: 'ss', tbsp: 'ss',
+  ml: 'ml',
+  dl: 'dl',
+  l: 'l', liter: 'l',
+  g: 'g', gram: 'g',
+  kg: 'kg', kilo: 'kg',
+  stk: 'stk', stykk: 'stk', stykker: 'stk',
+  pk: 'pk', pakke: 'pk', pakning: 'pk', pakninger: 'pk',
+  pose: 'pose', poser: 'pose',
+  boks: 'boks', bokser: 'boks',
+  flaske: 'flaske', flasker: 'flaske',
+  neve: 'stk', krm: 'tsk', klype: 'tsk', klyper: 'tsk',
+}
+
+// Unicode-brøker og norske brøk-skrivemåter
+function normaliserTall(s: string): string {
+  return s
+    .replace(/½/g, '0.5')
+    .replace(/¼/g, '0.25')
+    .replace(/¾/g, '0.75')
+    .replace(/⅓/g, '0.333')
+    .replace(/⅔/g, '0.667')
+    .replace(/\b(\d+)\/(\d+)\b/g, (_, a, b) => String(Number(a) / Number(b)))
+    .replace(/,/g, '.')
+}
+
+function parseIngredienslinje(raw: string): ParsedIngredient {
+  let s = normaliserTall(raw.trim())
+
+  // Prøv å matche: [tall] [enhet] [navn]   eller   [tall] [navn]
+  const tallenhetNavn = /^([\d.]+)\s+([a-zæøå.]+)\s+(.+)$/i
+  const tallNavn      = /^([\d.]+)\s+(.+)$/i
+
+  let m = s.match(tallenhetNavn)
+  if (m) {
+    const [, tallStr, enhetRaw, navnRest] = m
+    const enhet = UNIT_MAP[enhetRaw.toLowerCase().replace('.', '')]
+    if (enhet) {
+      return { amount: parseFloat(tallStr), unit: enhet, name: navnRest.trim() }
+    }
+    // Enhet ikke kjent — behandle enhetsdelen som del av navn
+    return { amount: parseFloat(tallStr), unit: 'stk', name: `${enhetRaw} ${navnRest}`.trim() }
+  }
+
+  m = s.match(tallNavn)
+  if (m) {
+    const [, tallStr, navn] = m
+    return { amount: parseFloat(tallStr), unit: 'stk', name: navn.trim() }
+  }
+
+  // Ingen tall funnet — hele strengen er ingrediensnavn
+  return { amount: null, unit: null, name: s }
 }
 
 function parseDuration(iso: string): number | null {
   if (!iso) return null
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/)
   if (!match) return null
-  const hours = parseInt(match[1] ?? '0', 10)
-  const minutes = parseInt(match[2] ?? '0', 10)
-  return hours * 60 + minutes
+  return (parseInt(match[1] ?? '0', 10)) * 60 + parseInt(match[2] ?? '0', 10)
 }
 
 function extractImage(image: SchemaRecipe['image']): string | null {
@@ -72,11 +132,13 @@ export async function POST(request: NextRequest) {
 
   const totalMinutes =
     parseDuration(recipe.totalTime ?? '') ??
-    (parseDuration(recipe.prepTime ?? '') ?? 0) + (parseDuration(recipe.cookTime ?? '') ?? 0)
+    ((parseDuration(recipe.prepTime ?? '') ?? 0) + (parseDuration(recipe.cookTime ?? '') ?? 0))
 
   const servings = typeof recipe.recipeYield === 'number'
     ? recipe.recipeYield
     : parseInt(String(recipe.recipeYield ?? '4'), 10) || 4
+
+  const parsedIngredients = (recipe.recipeIngredient ?? []).map(parseIngredienslinje)
 
   return NextResponse.json({
     name: recipe.name ?? '',
@@ -85,6 +147,6 @@ export async function POST(request: NextRequest) {
     prep_time_minutes: totalMinutes || null,
     source_url: url,
     image_url: extractImage(recipe.image),
-    raw_ingredients: recipe.recipeIngredient ?? [],
+    ingredients: parsedIngredients,
   })
 }

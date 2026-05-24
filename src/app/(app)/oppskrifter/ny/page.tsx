@@ -72,13 +72,15 @@ export default function NyOppskriftPage() {
       setPorsjoner(data.servings ?? 4)
       setTilberedningstid(data.prep_time_minutes?.toString() ?? '')
       setKildeUrl(importUrl)
-      if (data.raw_ingredients?.length > 0) {
-        setIngredienser(data.raw_ingredients.map((raw: string) => ({
-          ingredientNavn: raw,
-          amount: '',
-          unit: 'stk' as Unit,
-          note: raw,
-        })))
+      if (data.ingredients?.length > 0) {
+        setIngredienser(
+          data.ingredients.map((ing: { name: string; amount: number | null; unit: string | null }) => ({
+            ingredientNavn: ing.name,
+            amount: ing.amount != null ? String(ing.amount) : '',
+            unit: (ing.unit ?? 'stk') as Unit,
+            note: '',
+          }))
+        )
       }
       setFane('manuell')
     } catch {
