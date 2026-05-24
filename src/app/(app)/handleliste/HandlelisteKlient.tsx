@@ -551,8 +551,8 @@ export default function HandlelisteKlient({
                     type="number"
                     value={manueltAntall}
                     onChange={(e) => setManueltAntall(e.target.value)}
-                    min={0.1}
-                    step="0.5"
+                    min={0}
+                    step="any"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
                       focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
