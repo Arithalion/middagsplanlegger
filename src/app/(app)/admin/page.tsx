@@ -55,12 +55,12 @@ export default async function AdminPage() {
       .select(`
         id, reason, reported_at,
         recipe:recipes(id, name, is_public),
-        reported_by_household:households(name)
+        reported_by_household:households!left(name)
       `)
       .order('reported_at', { ascending: false }),
     supabase
       .from('recipes')
-      .select('id, name, category, created_at, household:households(name)')
+      .select('id, name, category, created_at, household:households!left(name)')
       .eq('is_public', true)
       .order('created_at', { ascending: false }),
   ])
