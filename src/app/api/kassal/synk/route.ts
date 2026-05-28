@@ -35,10 +35,10 @@ export async function POST() {
   const { data: householdId } = await supabase.rpc('my_household_id')
   if (!householdId) return NextResponse.json({ error: 'Fant ikke husstand' }, { status: 400 })
 
-  // Hent alle koblede produkter for husstanden
+  // Hent alle koblede produkter for husstanden (inkl. is_organic)
   const { data: rawLinks } = await supabase
     .from('household_ingredient_products')
-    .select('id, ingredient_id, kassal_ean, package_size, package_unit')
+    .select('id, ingredient_id, kassal_ean, package_size, package_unit, is_organic')
 
   const links = (rawLinks ?? []) as unknown as {
     id: string
@@ -46,6 +46,7 @@ export async function POST() {
     kassal_ean: string
     package_size: number
     package_unit: string
+    is_organic: boolean
   }[]
 
   if (links.length === 0) {
@@ -100,9 +101,10 @@ export async function POST() {
               price_per_unit: Math.round(pricePerUnit * 1000) / 1000,
               unit: link.package_unit,
               source: 'kassal',
+              is_organic: link.is_organic,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: 'ingredient_id' }
+            { onConflict: 'ingredient_id,is_organic' }
           )
       }
 

@@ -16,6 +16,7 @@ type KassalLink = {
   package_size: number
   package_unit: string
   price_per_package: number | null
+  is_organic: boolean
 }
 
 // ─── Eksporterte typer ───────────────────────────────────────────────────────
@@ -213,18 +214,46 @@ export async function beregnHandleliste(
     mealPlans = (data ?? []) as unknown as RawMealPlan[]
   }
 
-  // ── Hent beholdning + Kassal-koblinger parallelt ───────────────────────────
-  const [{ data: rawPantry }, { data: rawLinks }] = await Promise.all([
+  // ── Hent beholdning, innstillinger og Kassal-koblinger parallelt ──────────
+  const [{ data: rawPantry }, { data: rawLinks }, { data: settingsRow }] = await Promise.all([
     supabase.from('pantry_items').select('ingredient_id, amount'),
     supabase
       .from('household_ingredient_products')
-      .select('ingredient_id, package_size, package_unit, price_per_package'),
+      .select('ingredient_id, package_size, package_unit, price_per_package, is_organic'),
+    supabase.from('household_settings').select('prefer_organic').maybeSingle(),
   ])
 
   const pantry = rawPantry ?? []
   const links = (rawLinks ?? []) as unknown as KassalLink[]
+  const preferOrganic =
+    (settingsRow as unknown as { prefer_organic: boolean } | null)?.prefer_organic ?? false
 
-  const linkMap = new Map(links.map((l) => [l.ingredient_id, l]))
+  // Bygg separate linkmaps for normal og organisk
+  const normalLinkMap = new Map<string, KassalLink>()
+  const organicLinkMap = new Map<string, KassalLink>()
+  for (const l of links) {
+    if (l.is_organic) {
+      organicLinkMap.set(l.ingredient_id, l)
+    } else {
+      normalLinkMap.set(l.ingredient_id, l)
+    }
+  }
+
+  // Velg riktig link per ingrediens: organisk hvis prefer_organic og tilgjengelig,
+  // ellers fall tilbake til normal
+  const linkMap = new Map<string, KassalLink>()
+  const allIngredientIds = new Set([...normalLinkMap.keys(), ...organicLinkMap.keys()])
+  for (const id of allIngredientIds) {
+    const organic = organicLinkMap.get(id)
+    const normal = normalLinkMap.get(id)
+    if (preferOrganic && organic) {
+      linkMap.set(id, organic)
+    } else if (normal) {
+      linkMap.set(id, normal)
+    } else if (organic) {
+      linkMap.set(id, organic)
+    }
+  }
   const pantryMap = new Map<string, number>(
     pantry.map((p: { ingredient_id: string; amount: number }) => [p.ingredient_id, p.amount]),
   )

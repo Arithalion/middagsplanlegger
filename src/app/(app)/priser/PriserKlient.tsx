@@ -14,13 +14,23 @@ type KassalLink = {
   last_synced_at: string | null
 }
 
+type PriceInfo = {
+  id: string
+  price_per_unit: number
+  unit: string
+  source: string | null
+  updated_at: string
+}
+
 type PrisIng = {
   id: string
   name: string
   category: string | null
   default_unit: string
-  price: { id: string; price_per_unit: number; unit: string; source: string | null; updated_at: string } | null
-  kassalLink: KassalLink | null
+  normalPrice: PriceInfo | null
+  organicPrice: PriceInfo | null
+  normalLink: KassalLink | null
+  organicLink: KassalLink | null
 }
 
 type KassalTreff = {
@@ -35,6 +45,8 @@ type KassalTreff = {
   store: string | null
   is_organic: boolean
 }
+
+type LinkPair = { normal: KassalLink | null; organic: KassalLink | null }
 
 interface Props {
   ingredients: PrisIng[]
@@ -53,8 +65,8 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
   const [synker, setSynker] = useState(false)
   const [melding, setMelding] = useState('')
 
-  // Kassal-søk
-  const [kassalSøkId, setKassalSøkId] = useState<string | null>(null)
+  // Kassal-søk: { ingId, isOrganic } = hvilken rad vi åpnet for
+  const [kassalModal, setKassalModal] = useState<{ ingId: string; isOrganic: boolean } | null>(null)
   const [kassalQuery, setKassalQuery] = useState('')
   const [kassalTreff, setKassalTreff] = useState<KassalTreff[]>([])
   const [kassalSøker, setKassalSøker] = useState(false)
@@ -64,9 +76,9 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
   const søkInputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Lokale koblinger (optimistisk UI-oppdatering)
-  const [lokaleLinks, setLokaleLinks] = useState<Map<string, KassalLink | null>>(
-    new Map(ingredients.map((i) => [i.id, i.kassalLink]))
+  // Lokale koblinger: optimistisk UI-oppdatering
+  const [lokaleLinks, setLokaleLinks] = useState<Map<string, LinkPair>>(
+    new Map(ingredients.map((i) => [i.id, { normal: i.normalLink, organic: i.organicLink }]))
   )
 
   function visMelding(tekst: string) {
@@ -74,9 +86,9 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
     setTimeout(() => setMelding(''), 3500)
   }
 
-  // ── Åpne søkemodal ──────────────────────────────────────────────────────
-  function åpneKassalSøk(ing: PrisIng) {
-    setKassalSøkId(ing.id)
+  // ── Åpne søkemodal ──────────────────────────────────────────────────────────
+  function åpneKassalSøk(ing: PrisIng, isOrganic: boolean) {
+    setKassalModal({ ingId: ing.id, isOrganic })
     setKassalQuery(ing.name)
     setKassalTreff([])
     setKassalFeil('')
@@ -85,12 +97,12 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
   }
 
   function lukkModal() {
-    setKassalSøkId(null)
+    setKassalModal(null)
     setKassalTreff([])
     setKassalFeil('')
   }
 
-  // ── Søk i Kassal ─────────────────────────────────────────────────────────
+  // ── Søk i Kassal ────────────────────────────────────────────────────────────
   function triggerSøk(q: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (!q.trim()) { setKassalTreff([]); return }
@@ -118,8 +130,10 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kassalQuery])
 
-  // ── Koble produkt ─────────────────────────────────────────────────────────
-  async function kobleProdukt(ingId: string, treff: KassalTreff) {
+  // ── Koble produkt ───────────────────────────────────────────────────────────
+  async function kobleProdukt(treff: KassalTreff) {
+    if (!kassalModal) return
+    const { ingId, isOrganic } = kassalModal
     if (!treff.package_size || !treff.package_unit || !treff.kassal_ean) {
       setKassalFeil('Produktet mangler pakkedata — prøv et annet.')
       return
@@ -137,46 +151,55 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
           package_size: treff.package_size,
           package_unit: treff.package_unit,
           price_per_package: treff.price_per_package,
+          is_organic: isOrganic,
         }),
       })
       if (!res.ok) { setKassalFeil('Klarte ikke lagre. Prøv igjen.'); return }
 
       // Optimistisk oppdatering
+      const nyLink: KassalLink = {
+        kassal_ean: treff.kassal_ean,
+        kassal_product_id: treff.kassal_product_id,
+        product_name: treff.product_name,
+        package_size: treff.package_size!,
+        package_unit: treff.package_unit!,
+        price_per_package: treff.price_per_package,
+        last_synced_at: new Date().toISOString(),
+      }
       setLokaleLinks((prev) => {
         const ny = new Map(prev)
-        ny.set(ingId, {
-          kassal_ean: treff.kassal_ean,
-          kassal_product_id: treff.kassal_product_id,
-          product_name: treff.product_name,
-          package_size: treff.package_size!,
-          package_unit: treff.package_unit!,
-          price_per_package: treff.price_per_package,
-          last_synced_at: new Date().toISOString(),
-        })
+        const pair = ny.get(ingId) ?? { normal: null, organic: null }
+        ny.set(ingId, isOrganic ? { ...pair, organic: nyLink } : { ...pair, normal: nyLink })
         return ny
       })
 
       lukkModal()
-      visMelding(`${treff.product_name} koblet ✓`)
+      visMelding(`${treff.product_name} koblet${isOrganic ? ' 🌿' : ''} ✓`)
       startTransition(() => router.refresh())
     } finally {
       setKoblerIds((prev) => { const ny = new Set(prev); ny.delete(ingId); return ny })
     }
   }
 
-  // ── Avkoble produkt ───────────────────────────────────────────────────────
-  async function avkobleProdukt(ingId: string) {
-    if (!confirm('Fjerne Kassal-koblingen for denne ingrediensen?')) return
+  // ── Avkoble produkt ─────────────────────────────────────────────────────────
+  async function avkobleProdukt(ingId: string, isOrganic: boolean) {
+    const label = isOrganic ? 'den organiske' : 'den vanlige'
+    if (!confirm(`Fjerne ${label} Kassal-koblingen for denne ingrediensen?`)) return
     await fetch('/api/kassal/koble', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ingredient_id: ingId }),
+      body: JSON.stringify({ ingredient_id: ingId, is_organic: isOrganic }),
     })
-    setLokaleLinks((prev) => { const ny = new Map(prev); ny.set(ingId, null); return ny })
+    setLokaleLinks((prev) => {
+      const ny = new Map(prev)
+      const pair = ny.get(ingId) ?? { normal: null, organic: null }
+      ny.set(ingId, isOrganic ? { ...pair, organic: null } : { ...pair, normal: null })
+      return ny
+    })
     startTransition(() => router.refresh())
   }
 
-  // ── Synk alle priser ─────────────────────────────────────────────────────
+  // ── Synk alle priser ────────────────────────────────────────────────────────
   async function synkAllePriser() {
     setSynker(true)
     const res = await fetch('/api/kassal/synk', { method: 'POST' })
@@ -186,7 +209,7 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
     startTransition(() => router.refresh())
   }
 
-  // ── Manuell pris ─────────────────────────────────────────────────────────
+  // ── Manuell pris ────────────────────────────────────────────────────────────
   async function lagrePris(ingredientId: string) {
     if (!nyPris) return
     setLagrer(true)
@@ -209,10 +232,15 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
     (i.category ?? '').toLowerCase().includes(søk.toLowerCase())
   )
 
-  const antallKoblet = Array.from(lokaleLinks.values()).filter(Boolean).length
-  const medPris = ingredients.filter((i) => i.price !== null).length
+  const antallKoblet = Array.from(lokaleLinks.values())
+    .filter((p) => p.normal || p.organic).length
+  const medPris = ingredients.filter(
+    (i) => i.normalPrice !== null || i.organicPrice !== null
+  ).length
 
-  const aktivIngrediens = kassalSøkId ? ingredients.find((i) => i.id === kassalSøkId) : null
+  const aktivIngrediens = kassalModal
+    ? ingredients.find((i) => i.id === kassalModal.ingId)
+    : null
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -242,13 +270,14 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
       {/* ── Organisk-info ── */}
       {preferOrganic && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 mb-4 text-sm text-green-700 flex items-center gap-2">
-          🌿 Organisk-preferanse er på — Kassal-søk viser økologiske produkter øverst
+          🌿 Organisk-preferanse er på — handlelisten bruker organisk kobling når tilgjengelig
         </div>
       )}
 
       {/* ── Info ── */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-5 text-sm text-blue-700">
-        💡 Koble ingredienser til Kassal-produkter for automatisk prisoppdatering og pakkeutregning i handlelisten.
+        💡 Koble ingredienser til Kassal-produkter for automatisk prisoppdatering.
+        Du kan ha én normal og én organisk kobling per ingrediens.
       </div>
 
       {/* ── Søk ── */}
@@ -271,53 +300,24 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           {filtrert.map((ing, i) => {
-            const link = lokaleLinks.get(ing.id) ?? null
+            const pair = lokaleLinks.get(ing.id) ?? { normal: null, organic: null }
+            const hasAnyLink = pair.normal || pair.organic
+
             return (
               <div
                 key={ing.id}
                 className={`px-4 py-3 ${i > 0 ? 'border-t border-gray-100' : ''}`}
               >
-                <div className="flex items-center gap-3">
-                  {/* Ingrediensnavn */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{ing.name}</p>
+                {/* Ingrediensnavn */}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{ing.name}</p>
                     {ing.category && <p className="text-xs text-gray-400">{ing.category}</p>}
                   </div>
 
-                  {/* Kassal-status + handlinger */}
-                  {link ? (
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">
-                          {link.price_per_package != null
-                            ? `${link.price_per_package.toFixed(2)} kr`
-                            : 'Pris ukjent'}
-                        </p>
-                        <p className="text-xs text-gray-400 truncate max-w-[120px]" title={link.product_name}>
-                          {link.product_name}
-                        </p>
-                        {link.last_synced_at && (
-                          <p className="text-xs text-gray-300">
-                            {new Date(link.last_synced_at).toLocaleDateString('nb-NO')}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-green-500 text-lg" title="Koblet til Kassal">🛒</span>
-                      <button
-                        onClick={() => åpneKassalSøk(ing)}
-                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Bytt
-                      </button>
-                      <button
-                        onClick={() => avkobleProdukt(ing.id)}
-                        className="text-xs text-red-400 hover:text-red-600"
-                      >
-                        Fjern
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3 shrink-0">
+                  {/* Manuell pris (kun når ingen Kassal-link) */}
+                  {!hasAnyLink && (
+                    <div className="shrink-0">
                       {redigerer === ing.id ? (
                         <div className="flex items-center gap-2">
                           <input
@@ -347,39 +347,51 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
                           </button>
                         </div>
                       ) : (
-                        <>
-                          {ing.price ? (
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-gray-900">
-                                {ing.price.price_per_unit.toFixed(2)} kr/{ing.price.unit}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {ing.price.source === 'kassal' ? '🛒 kassal' : '✏️ manuell'} · {new Date(ing.price.updated_at).toLocaleDateString('nb-NO')}
-                              </p>
-                            </div>
+                        <div className="flex items-center gap-2">
+                          {ing.normalPrice ? (
+                            <span className="text-xs text-gray-500">
+                              {ing.normalPrice.price_per_unit.toFixed(2)} kr/{ing.normalPrice.unit}
+                              {' '}
+                              <span className="text-gray-300">
+                                ({ing.normalPrice.source === 'kassal' ? '🛒' : '✏️'})
+                              </span>
+                            </span>
                           ) : (
                             <span className="text-xs text-gray-400 italic">Ingen pris</span>
                           )}
                           {lagretId === ing.id && <span className="text-xs text-green-600">✓</span>}
                           <button
-                            onClick={() => åpneKassalSøk(ing)}
-                            className="text-xs text-white bg-orange-500 px-2 py-1 rounded-md hover:bg-orange-600 font-medium whitespace-nowrap"
-                          >
-                            🛒 Kassal
-                          </button>
-                          <button
                             onClick={() => {
                               setRedigerer(ing.id)
-                              setNyPris(ing.price?.price_per_unit.toString() ?? '')
+                              setNyPris(ing.normalPrice?.price_per_unit.toString() ?? '')
                             }}
                             className="text-xs text-green-600 hover:text-green-700 font-medium"
                           >
-                            {ing.price ? 'Endre' : 'Manuell'}
+                            {ing.normalPrice ? 'Endre' : 'Manuell'}
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* Sub-rader: Normal + Organisk */}
+                <div className="space-y-1.5 pl-1">
+                  <KassalSubRad
+                    label="Normal"
+                    link={pair.normal}
+                    kobler={koblerIds.has(ing.id)}
+                    onKoble={() => åpneKassalSøk(ing, false)}
+                    onFjern={() => avkobleProdukt(ing.id, false)}
+                  />
+                  <KassalSubRad
+                    label="Organisk"
+                    link={pair.organic}
+                    kobler={koblerIds.has(ing.id)}
+                    onKoble={() => åpneKassalSøk(ing, true)}
+                    onFjern={() => avkobleProdukt(ing.id, true)}
+                    isOrganic
+                  />
                 </div>
               </div>
             )
@@ -388,7 +400,7 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
       )}
 
       {/* ── Kassal søkemodal ── */}
-      {kassalSøkId && aktivIngrediens && (
+      {kassalModal && aktivIngrediens && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
           onClick={(e) => { if (e.target === e.currentTarget) lukkModal() }}
@@ -398,7 +410,10 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
-                <h2 className="text-base font-semibold text-gray-900">Koble til Kassal-produkt</h2>
+                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-1.5">
+                  {kassalModal.isOrganic && <span className="text-green-600">🌿</span>}
+                  {kassalModal.isOrganic ? 'Organisk kobling' : 'Normal kobling'}
+                </h2>
                 <p className="text-sm text-gray-500">{aktivIngrediens.name}</p>
               </div>
               <button
@@ -437,14 +452,14 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
 
               {!kassalSøker && kassalTreff.length > 0 && (
                 <div>
-                  {kassalTreff.map((treff, i) => (
+                  {kassalTreff.map((treff, idx) => (
                     <button
-                      key={treff.kassal_ean + i}
-                      onClick={() => kobleProdukt(kassalSøkId, treff)}
-                      disabled={koblerIds.has(kassalSøkId)}
+                      key={treff.kassal_ean + idx}
+                      onClick={() => kobleProdukt(treff)}
+                      disabled={koblerIds.has(kassalModal.ingId)}
                       className={`w-full flex items-center gap-4 px-5 py-4 text-left
                         hover:bg-gray-50 transition-colors
-                        ${i > 0 ? 'border-t border-gray-100' : ''}
+                        ${idx > 0 ? 'border-t border-gray-100' : ''}
                         disabled:opacity-50`}
                     >
                       {/* Produktbilde */}
@@ -484,7 +499,7 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
                         ) : (
                           <p className="text-xs text-gray-400">Ingen pris</p>
                         )}
-                        {koblerIds.has(kassalSøkId) ? (
+                        {koblerIds.has(kassalModal.ingId) ? (
                           <p className="text-xs text-orange-500 mt-0.5">Lagrer…</p>
                         ) : (
                           <p className="text-xs text-orange-500 font-medium mt-0.5">Velg</p>
@@ -497,6 +512,71 @@ export default function PriserKlient({ ingredients, preferOrganic }: Props) {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── Hjelpkomponent: én sub-rad (Normal eller Organisk) ───────────────────────
+
+function KassalSubRad({
+  label,
+  link,
+  kobler,
+  onKoble,
+  onFjern,
+  isOrganic = false,
+}: {
+  label: string
+  link: KassalLink | null
+  kobler: boolean
+  onKoble: () => void
+  onFjern: () => void
+  isOrganic?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs min-h-[24px]">
+      {/* Label */}
+      <span className={`w-16 shrink-0 font-medium ${isOrganic ? 'text-green-700' : 'text-gray-500'}`}>
+        {isOrganic ? '🌿 Øk.' : '🛒 Norm.'}
+      </span>
+
+      {link ? (
+        <>
+          {/* Produktinfo */}
+          <span className="text-gray-700 truncate max-w-[140px]" title={link.product_name}>
+            {link.product_name}
+          </span>
+          {link.price_per_package != null && (
+            <span className="text-gray-500 shrink-0">
+              · {link.price_per_package.toFixed(2)} kr
+            </span>
+          )}
+          <button
+            onClick={onKoble}
+            className="ml-auto text-blue-600 hover:text-blue-700 font-medium shrink-0"
+          >
+            Bytt
+          </button>
+          <button
+            onClick={onFjern}
+            className="text-red-400 hover:text-red-600 shrink-0"
+          >
+            Fjern
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={onKoble}
+          disabled={kobler}
+          className={`px-2 py-0.5 rounded-md font-medium transition-colors disabled:opacity-40
+            ${isOrganic
+              ? 'text-green-700 bg-green-50 hover:bg-green-100 border border-green-200'
+              : 'text-white bg-orange-500 hover:bg-orange-600'
+            }`}
+        >
+          {kobler ? '…' : 'Koble →'}
+        </button>
       )}
     </div>
   )

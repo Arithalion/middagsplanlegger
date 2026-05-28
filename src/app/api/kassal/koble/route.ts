@@ -18,7 +18,10 @@ export async function POST(request: NextRequest) {
     package_size: number
     package_unit: string
     price_per_package: number | null
+    is_organic: boolean
   }
+
+  const isOrganic = body.is_organic ?? false
 
   // Lagre/oppdater koblingen
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,9 +37,10 @@ export async function POST(request: NextRequest) {
         package_size: body.package_size,
         package_unit: body.package_unit,
         price_per_package: body.price_per_package,
+        is_organic: isOrganic,
         last_synced_at: new Date().toISOString(),
       },
-      { onConflict: 'household_id,ingredient_id' }
+      { onConflict: 'household_id,ingredient_id,is_organic' }
     )
 
   if (error) {
@@ -55,28 +59,39 @@ export async function POST(request: NextRequest) {
           price_per_unit: Math.round(pricePerUnit * 1000) / 1000,
           unit: body.package_unit,
           source: 'kassal',
+          is_organic: isOrganic,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'ingredient_id' }
+        { onConflict: 'ingredient_id,is_organic' }
       )
   }
 
   return NextResponse.json({ ok: true })
 }
 
-// DELETE /api/kassal/koble — fjerner en kobling
+// DELETE /api/kassal/koble — fjerner en kobling (normal eller organisk)
 export async function DELETE(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Ikke innlogget' }, { status: 401 })
 
-  const { ingredient_id } = await request.json() as { ingredient_id: string }
+  const { ingredient_id, is_organic } = await request.json() as {
+    ingredient_id: string
+    is_organic?: boolean
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  let query = (supabase as any)
     .from('household_ingredient_products')
     .delete()
     .eq('ingredient_id', ingredient_id)
+
+  // Hvis is_organic er oppgitt, slett kun den spesifikke varianten
+  if (is_organic !== undefined) {
+    query = query.eq('is_organic', is_organic)
+  }
+
+  await query
 
   return NextResponse.json({ ok: true })
 }
