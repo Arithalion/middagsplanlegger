@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { addPantryItem } from '@/lib/actions/pantry'
 import type { Unit } from '@/types/database'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ScannerControls = { stop: () => void; [key: string]: any }
+
 const ENHET_GRUPPER = [
   { label: 'Vekt',   enheter: ['g', 'kg'] as Unit[] },
   { label: 'Volum',  enheter: ['ml', 'dl', 'l', 'tsk', 'ss'] as Unit[] },
@@ -33,8 +36,7 @@ type Fase = 'skanner' | 'produkt' | 'feil'
 export default function StrekkodeSkanner({ onLukk, ingredients }: Props) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const readerRef = useRef<any>(null)
+  const controlsRef = useRef<ScannerControls | null>(null)
   const harOppdagetRef = useRef(false)
 
   const [fase, setFase] = useState<Fase>('skanner')
@@ -50,9 +52,9 @@ export default function StrekkodeSkanner({ onLukk, ingredients }: Props) {
   const [leggerTil, setLeggerTil] = useState(false)
 
   const stoppSkanner = useCallback(() => {
-    if (readerRef.current) {
-      try { readerRef.current.reset() } catch { /* ignorer */ }
-      readerRef.current = null
+    if (controlsRef.current) {
+      try { controlsRef.current.stop() } catch { /* ignorer */ }
+      controlsRef.current = null
     }
   }, [])
 
@@ -67,18 +69,22 @@ export default function StrekkodeSkanner({ onLukk, ingredients }: Props) {
     try {
       const { BrowserMultiFormatReader } = await import('@zxing/browser')
       const reader = new BrowserMultiFormatReader()
-      readerRef.current = reader
 
-      await reader.decodeFromVideoDevice(
-        undefined, // bruk standard kamera (bakre på mobil)
+      // decodeFromVideoDevice returnerer Promise<IScannerControls>
+      // Callbacken mottar (result, error, controls) — vi stopper via controls
+      const controls = await reader.decodeFromVideoDevice(
+        undefined, // standard kamera (bakre på mobil)
         videoRef.current,
-        async (result, err) => {
+        async (result, _error, controls) => {
           if (!result) return
           if (harOppdagetRef.current) return
           harOppdagetRef.current = true
 
+          // Stopp scanning umiddelbart via controls fra callbacken
+          try { controls.stop() } catch { /* ignorer */ }
+          controlsRef.current = null
+
           const ean = result.getText()
-          stoppSkanner()
           setLasterApi(true)
 
           try {
@@ -112,11 +118,21 @@ export default function StrekkodeSkanner({ onLukk, ingredients }: Props) {
           }
         }
       )
-    } catch {
-      setFeilmelding('Kameraet er ikke tilgjengelig. Sjekk tillatelser i nettleseren.')
+
+      // Lagre controls for opprydding når brukeren lukker modalen
+      controlsRef.current = controls
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
+        setFeilmelding('Kameratilgang ble avvist. Tillat kamerabruk i nettleserinnstillingene.')
+      } else if (msg.toLowerCase().includes('https') || msg.toLowerCase().includes('insecure')) {
+        setFeilmelding('Kamera krever HTTPS. Åpne appen via en sikker tilkobling.')
+      } else {
+        setFeilmelding('Kameraet er ikke tilgjengelig. Sjekk tillatelser i nettleseren.')
+      }
       setFase('feil')
     }
-  }, [stoppSkanner, ingredients])
+  }, [ingredients])
 
   useEffect(() => {
     startSkanner()
@@ -140,6 +156,7 @@ export default function StrekkodeSkanner({ onLukk, ingredients }: Props) {
   }
 
   function handleSkannNeste() {
+    stoppSkanner()
     startSkanner()
   }
 
@@ -175,12 +192,10 @@ export default function StrekkodeSkanner({ onLukk, ingredients }: Props) {
         {fase === 'skanner' && !lasterApi && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="relative w-72 h-40">
-              {/* Hjørner */}
               <span className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-green-400 rounded-tl" />
               <span className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-green-400 rounded-tr" />
               <span className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-green-400 rounded-bl" />
               <span className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-green-400 rounded-br" />
-              {/* Sikte-linje */}
               <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-green-400/60 -translate-y-0.5" />
             </div>
           </div>
