@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatMengde } from '@/lib/utils'
 import { addPantryItem, deletePantryItem } from '@/lib/actions/pantry'
 import type { Unit } from '@/types/database'
+
+const StrekkodeSkanner = lazy(() => import('./StrekkodeSkanner'))
 
 const ENHETER: Unit[] = ['g', 'kg', 'ml', 'dl', 'l', 'tsk', 'ss', 'stk', 'boks', 'pose', 'flaske', 'pk']
 
@@ -39,6 +41,7 @@ export default function BeholdningKlient({ items, ingredients }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [visSkjema, setVisSkjema] = useState(false)
+  const [visSkanner, setVisSkanner] = useState(false)
   const [ingredientId, setIngredientId] = useState('')
   const [amount, setAmount] = useState('')
   const [unit, setUnit] = useState<Unit>('stk')
@@ -83,13 +86,22 @@ export default function BeholdningKlient({ items, ingredients }: Props) {
             {snartCount > 0 && <span className="text-amber-600 font-medium"> · {snartCount} utløper snart</span>}
           </p>
         </div>
-        <button
-          onClick={() => setVisSkjema(!visSkjema)}
-          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg
-            hover:bg-green-700 transition-colors"
-        >
-          {visSkjema ? '✕ Avbryt' : '+ Legg til vare'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setVisSkanner(true)}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg
+              hover:bg-blue-700 transition-colors"
+          >
+            📷 Skann
+          </button>
+          <button
+            onClick={() => setVisSkjema(!visSkjema)}
+            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg
+              hover:bg-green-700 transition-colors"
+          >
+            {visSkjema ? '✕ Avbryt' : '+ Legg til vare'}
+          </button>
+        </div>
       </div>
 
       {/* Legg til skjema */}
@@ -208,6 +220,16 @@ export default function BeholdningKlient({ items, ingredients }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Strekkodeskanner-modal */}
+      {visSkanner && (
+        <Suspense fallback={null}>
+          <StrekkodeSkanner
+            ingredients={ingredients}
+            onLukk={() => setVisSkanner(false)}
+          />
+        </Suspense>
       )}
     </div>
   )
