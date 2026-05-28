@@ -4,6 +4,13 @@ import { NextRequest, NextResponse } from 'next/server'
 const KASSAL_BASE = 'https://kassal.app/api/v1'
 
 // Kassal EAN-endepunkt returnerer { data: { products: [...] } }
+// NB: current_price er et objekt i EAN-endepunktet, ulikt søk-endepunktet (tall)
+type KassalEanCurrentPrice = {
+  price: number
+  unit_price: number
+  date: string
+} | null
+
 type KassalEanProduct = {
   id: number
   name: string
@@ -11,7 +18,7 @@ type KassalEanProduct = {
   vendor: string | null
   ean: string | null
   image: string | null
-  current_price: number | null
+  current_price: KassalEanCurrentPrice
   weight: number | null
   weight_unit: string | null
 }
@@ -85,7 +92,7 @@ export async function GET(request: NextRequest) {
     brand: p.brand ?? null,
     package_size: p.weight ?? null,
     package_unit: packageUnit,
-    price: p.current_price ?? null,
+    price: p.current_price?.price ?? null,
     is_organic: isOrganic(p.name),
     kassal_product_id: p.id,
     ean,
