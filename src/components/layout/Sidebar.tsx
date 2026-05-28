@@ -13,6 +13,7 @@ const allNav = [
   { href: '/matpakker',     label: 'Matpakker',      icon: '🍞' },
   { href: '/beholdning',    label: 'Beholdning',     icon: '📦' },
   { href: '/priser',        label: 'Priser',         icon: '💲' },
+  { href: '/ingredienser',  label: 'Ingredienser',   icon: '🥕' },
   { href: '/budsjett',      label: 'Budsjett',       icon: '💰' },
   { href: '/innstillinger', label: 'Innstillinger',  icon: '⚙️'  },
 ]
